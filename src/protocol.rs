@@ -1,31 +1,35 @@
 use time::SteadyTime;
 use rotor::Scope;
 
-use {Transport};
+use {Transport, Request, StreamSocket};
 
 
-pub enum Expectation<M: Sized> {
-    Bytes(M, usize, SteadyTime),
-    Delimiter(M, &'static str, SteadyTime),
-    Flush(M, usize, SteadyTime),
-    Sleep(M, SteadyTime),
+pub enum Expectation {
+    Bytes(usize),
+    Delimiter(&'static str),
+    Flush(usize),
+    Sleep,
 }
 
-pub trait Protocol<C>: Sized {
+pub trait Protocol<C, S: StreamSocket>: Sized {
     /// Starting the protocol (e.g. accepted a socket)
-    fn start(self, scope: &mut Scope<C>) -> Expectation<Self>;
+    fn new(self, sock: &mut S) -> Request<Self>;
+
+    /// Starting the protocol (e.g. accepted a socket)
+    fn start(self, scope: &mut Scope<C>) -> Request<Self>;
 
     /// The action WaitBytes or WaitDelimiter is complete
-    fn bytes_read(self, transport: &mut Transport, scope: &mut Scope<C>)
-        -> Expectation<Self>;
+    fn bytes_read(self, transport: &mut Transport,
+                  end: usize, scope: &mut Scope<C>)
+        -> Request<Self>;
 
     /// The action Flush is complete
-    fn bytes_flush(self, scope: &mut Scope<C>)
-        -> Expectation<Self>;
+    fn bytes_flushed(self, scope: &mut Scope<C>) -> Request<Self>;
 
-    /// Timeout happened
-    fn timeout(self, scope: &mut Scope<C>) -> Expectation<Self>;
+    /// Timeout happened, which means either deadline reached in
+    /// Bytes, Delimiter, Flush. Or Sleep has passed.
+    fn timeout(self, scope: &mut Scope<C>) -> Request<Self>;
 
     /// Message received (from the main loop)
-    fn wakeup(self, scope: &mut Scope<C>) -> Expectation<Self>;
+    fn wakeup(self, scope: &mut Scope<C>) -> Request<Self>;
 }
