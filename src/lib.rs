@@ -1,3 +1,20 @@
+//! Stream abstraction for rotor
+//!
+//! Assumptions:
+//!
+//! 1. You read data by length-prefixed or fixed-string-delimited chunks rather
+//!    than byte-by-byte
+//! 2. Each chunk fits memory
+//! 3. Your data stream is not entirely full-duplex: while you can read and
+//!    write simultaneously, when you apply pushback (i.e. waiting for bytes to
+//!    be flushed), you can't do reads [*]
+//!
+//! [*] This matches HTTP perfectly, and most bidirectional interactive
+//!     workflows (including based on websockets). But for some cases may be
+//!     hard to implement. One such case is when you need to generate some
+//!     output stream (you can't buffer it), and have to parse input stream at
+//!     the same time.
+
 extern crate netbuf;
 extern crate memchr;
 extern crate rotor;
@@ -35,6 +52,8 @@ pub struct Stream<C, S: StreamSocket, P: Protocol<C, S>> {
     expectation: Expectation,
     deadline: Deadline,
     timeout: Timeout,
+    inbuf: netbuf::Buf,
+    outbuf: netbuf::Buf,
     phantom: PhantomData<*const C>,
 }
 
@@ -43,6 +62,8 @@ struct StreamImpl<S: StreamSocket> {
     expectation: Expectation,
     deadline: Deadline,
     timeout: Timeout,
+    inbuf: netbuf::Buf,
+    outbuf: netbuf::Buf,
 }
 
 impl<T> StreamSocket for T where T: Read, T: Write, T: Evented, T:Any {}
