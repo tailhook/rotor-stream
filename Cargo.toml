@@ -13,10 +13,11 @@ authors = ["paul@colomiets.name"]
 
 [dependencies]
 mio = "0.5"
-rotor = { rev="eaec9ae", git="git://github.com/tailhook/rotor" }
+rotor = { rev="d72c30c", git="git://github.com/tailhook/rotor" }
 netbuf = "0.3.0"
 memchr = "0.1.7"
 time = "0.1.34"
+void = "0.0.5"
 
 [dev-dependencies]
 argparse = "0.2.1"

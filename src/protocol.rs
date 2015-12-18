@@ -13,10 +13,7 @@ pub enum Expectation {
 
 pub trait Protocol<C, S: StreamSocket>: Sized {
     /// Starting the protocol (e.g. accepted a socket)
-    fn new(self, sock: &mut S) -> Request<Self>;
-
-    /// Starting the protocol (e.g. accepted a socket)
-    fn start(self, scope: &mut Scope<C>) -> Request<Self>;
+    fn create(sock: &mut S, scope: &mut Scope<C>) -> Request<Self>;
 
     /// The action WaitBytes or WaitDelimiter is complete
     fn bytes_read(self, transport: &mut Transport,
