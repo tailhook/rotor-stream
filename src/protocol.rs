@@ -1,10 +1,12 @@
-use time::SteadyTime;
 use rotor::Scope;
 
 use {Transport, Request, StreamSocket};
 
 
-#[derive(Clone, Copy)]
+// #[derive(Clone, Clone)]
+// This could be Copy, but I think it could be implemented efficient enough
+// without Copy and Clone. Probably we will enable them for the user code later
+#[derive(Debug)]
 pub enum Expectation {
     /// Read number of bytes
     ///
@@ -14,14 +16,14 @@ pub enum Expectation {
     /// Note that real number of bytes that `netbuf::Buf` might contain is less
     /// than 4Gb. So this value can't be as big as `usize::MAX`
     Bytes(usize),
-    /// Read until delimiter.
+    /// Read until delimiter, but no more than N bytes.
     ///
     /// Only static strings are support for delimiter now.
     ///
     /// `bytes_read` action gets passed `num` bytes before the delimeter, or
     /// in other words, the position of the delimiter in the buffer.
     /// The delimiter is guaranteed to be in the buffer too.
-    Delimiter(&'static str),
+    Delimiter(&'static str, usize),
     /// Wait until no more than N bytes is in output buffer
     ///
     /// This is going to be used for several cases:

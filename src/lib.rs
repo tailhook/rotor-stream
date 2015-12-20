@@ -59,7 +59,6 @@ pub struct Stream<C, S: StreamSocket, P: Protocol<C, S>> {
 
 struct StreamImpl<S: StreamSocket> {
     socket: S,
-    expectation: Expectation,
     deadline: Deadline,
     timeout: Timeout,
     inbuf: netbuf::Buf,

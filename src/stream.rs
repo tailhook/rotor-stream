@@ -1,6 +1,7 @@
 use std::fmt;
 use std::error::Error;
 use std::marker::PhantomData;
+use std::io::ErrorKind::WouldBlock;
 
 use time::SteadyTime;
 use rotor::{Response, Scope, Machine};
@@ -13,7 +14,7 @@ use {Transport, Deadline};
 
 
 impl<S: StreamSocket> StreamImpl<S> {
-    fn _action<C, M>(mut self, mut req: Request<M>, scope: &mut Scope<C>)
+    fn _action<C, M>(mut self, req: Request<M>, scope: &mut Scope<C>)
         -> Result<Stream<C, S, M>, ()>
         where M: Protocol<C, S>,
               S: StreamSocket,
@@ -40,7 +41,7 @@ impl<S: StreamSocket> StreamImpl<S> {
                         }
                     }
                 }
-                Delimiter(delim) => {
+                Delimiter(delim, max) => {
                     loop {
                         if let Some(num) = find_substr(&self.inbuf[..], delim) {
                             req = try!(req.0.bytes_read(&mut Transport {
@@ -48,6 +49,9 @@ impl<S: StreamSocket> StreamImpl<S> {
                                 outbuf: &mut self.outbuf,
                             }, num, scope).ok_or(()));
                             continue 'outer;
+                        }
+                        if self.inbuf.len() > max {
+                            return Err(());
                         }
                         if !try!(self.read()) {
                             return Ok(Stream::compose(self, req, scope));
@@ -80,22 +84,55 @@ impl<S: StreamSocket> StreamImpl<S> {
             Err(()) => Response::done(),
         }
     }
+    // Returns Ok(true) to if we have read something, does not loop for reading
+    // because this might use whole memory, and we may parse and consume the
+    // input instead of buffering it whole.
     fn read(&mut self) -> Result<bool, ()> {
-        unimplemented!();
+        match self.inbuf.read_from(&mut self.socket) {
+            Ok(0) => {
+                return Err(());
+            }
+            Ok(_) => {
+                return Ok(true);
+            }
+            Err(ref e) if e.kind() == WouldBlock => {
+                return Ok(false);
+            }
+            Err(_) => {
+                return Err(());
+            }
+        }
     }
+    // Returns Ok(true) if buffer is empty, returns Ok(false) if write returned
+    // EAGAIN, so subsequent item is expected to return too, and we need to
+    // wait for next edge-triggered POLLOUT to be able to write.
     fn write(&mut self) -> Result<bool, ()> {
         if self.outbuf.len() == 0 {
             return Ok(true);
         }
-        unimplemented!();
+        loop {
+            match self.outbuf.write_to(&mut self.socket) {
+                Ok(0) => {
+                    return Err(());
+                }
+                Ok(_) => {
+                    continue;
+                }
+                Err(ref e) if e.kind() == WouldBlock  => {
+                    return Ok(self.outbuf.len() == 0);
+                }
+                Err(_) => {
+                    return Err(());
+                }
+            }
+        }
     }
 }
 
 impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
-    fn decompose(self) -> (P, StreamImpl<S>) {
-        (self.fsm, StreamImpl {
+    fn decompose(self) -> (P, Expectation, StreamImpl<S>) {
+        (self.fsm, self.expectation, StreamImpl {
             socket: self.socket,
-            expectation: self.expectation,
             deadline: self.deadline,
             timeout: self.timeout,
             inbuf: self.inbuf,
@@ -104,7 +141,7 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
     }
     fn compose(implem: StreamImpl<S>,
         (fsm, exp, dline): (P, Expectation, Deadline),
-        scope: &mut Scope<C>)
+        _scope: &mut Scope<C>)
         -> Stream<C, S, P>
     {
         Stream {
@@ -132,7 +169,6 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
         // readable()/writable() mask (no duplication in kernel space)
         try!(scope.register(&sock,
             EventSet::readable() | EventSet::writable(), PollOpt::edge()));
-        // TODO(tailhook) start
         match P::create(&mut sock, scope) {
             None => return Err(Box::new(ProtocolStop)),
             Some((m, exp, dline)) => {
@@ -152,19 +188,28 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
             }
         }
     }
-    fn ready(self, events: EventSet, scope: &mut Scope<C>)
+    fn ready(self, _events: EventSet, scope: &mut Scope<C>)
         -> Response<Self, Self::Seed>
     {
-        unimplemented!();
+        // TODO(tailhook) use `events` to optimize reading
+        let (fsm, exp, imp) = self.decompose();
+        let deadline = imp.deadline;
+        imp.action(Some((fsm, exp, deadline)), scope)
     }
-    fn spawned(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
+    fn spawned(self, _scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
         unreachable!();
     }
     fn timeout(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
-        unimplemented!();
+        if Deadline::now() >= self.deadline {
+            let (fsm, _exp, imp) = self.decompose();
+            imp.action(fsm.timeout(scope), scope)
+        } else {
+            // Spurious timeouts are possible for the couple of reasons
+            Response::ok(self)
+        }
     }
     fn wakeup(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
-        let (fsm, imp) = self.decompose();
+        let (fsm, _exp, imp) = self.decompose();
         imp.action(fsm.wakeup(scope), scope)
     }
 }
