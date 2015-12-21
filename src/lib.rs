@@ -26,14 +26,16 @@ mod substr;
 mod transport;
 mod protocol;
 mod stream;
+mod accept;
 
 pub use protocol::{Protocol, Expectation};
 
 use std::any::Any;
 use std::marker::PhantomData;
 use std::io::{Read, Write};
-use mio::{Evented, Timeout};
 use time::SteadyTime;
+
+use mio::{Evented, Timeout, TryAccept};
 
 pub type Deadline = SteadyTime;
 pub type Request<M> = Option<(M, Expectation, Deadline)>;
@@ -44,6 +46,15 @@ pub trait StreamSocket: Read + Write + Evented + Any {}
 pub struct Transport<'a> {
     inbuf: &'a mut netbuf::Buf,
     outbuf: &'a mut netbuf::Buf,
+}
+
+/// Socket acceptor State Machine
+///
+/// TODO(tailhook) Currently this panics when there is no slab space when
+/// accepting a connection. This may be fixed by sleeping and retrying
+pub enum Accept<A: TryAccept+Sized, M: Sized> {
+    Server(A),
+    Connection(M),
 }
 
 pub struct Stream<C, S: StreamSocket, P: Protocol<C, S>> {
