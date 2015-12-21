@@ -59,7 +59,7 @@ impl<S: StreamSocket> StreamImpl<S> {
                     }
                 }
                 Flush(num) => {
-                    if self.outbuf.len() < num {
+                    if self.outbuf.len() <= num {
                         req = try!(req.0.bytes_flushed(&mut Transport {
                             inbuf: &mut self.inbuf,
                             outbuf: &mut self.outbuf,
@@ -75,7 +75,7 @@ impl<S: StreamSocket> StreamImpl<S> {
         }
     }
     fn action<C, M>(self, req: Request<M>, scope: &mut Scope<C>)
-        -> Response<Stream<C, S, M>, S>
+        -> Response<Stream<C, S, M>, (S, M::Seed)>
         where M: Protocol<C, S>,
               S: StreamSocket
     {
@@ -107,10 +107,10 @@ impl<S: StreamSocket> StreamImpl<S> {
     // EAGAIN, so subsequent item is expected to return too, and we need to
     // wait for next edge-triggered POLLOUT to be able to write.
     fn write(&mut self) -> Result<bool, ()> {
-        if self.outbuf.len() == 0 {
-            return Ok(true);
-        }
         loop {
+            if self.outbuf.len() == 0 {
+                return Ok(true);
+            }
             match self.outbuf.write_to(&mut self.socket) {
                 Ok(0) => {
                     return Err(());
@@ -121,7 +121,7 @@ impl<S: StreamSocket> StreamImpl<S> {
                 Err(ref e) if e.kind() == WouldBlock  => {
                     return Ok(self.outbuf.len() == 0);
                 }
-                Err(_) => {
+                Err(_e) => {
                     return Err(());
                 }
             }
@@ -158,8 +158,10 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
 }
 
 impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
-    type Seed = S;
-    fn create(mut sock: S, scope: &mut Scope<C>) -> Result<Self, Box<Error>> {
+    type Seed = (S, P::Seed);
+    fn create((mut sock, seed): Self::Seed, scope: &mut Scope<C>)
+        -> Result<Self, Box<Error>>
+    {
         // Always register everything in edge-triggered mode.
         // This allows to never reregister socket.
         //
@@ -169,7 +171,7 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
         // readable()/writable() mask (no duplication in kernel space)
         try!(scope.register(&sock,
             EventSet::readable() | EventSet::writable(), PollOpt::edge()));
-        match P::create(&mut sock, scope) {
+        match P::create(seed, &mut sock, scope) {
             None => return Err(Box::new(ProtocolStop)),
             Some((m, exp, dline)) => {
                 let diff = dline - SteadyTime::now();

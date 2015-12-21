@@ -1,3 +1,4 @@
+use std::any::Any;
 use rotor::Scope;
 
 use {Transport, Request, StreamSocket};
@@ -44,8 +45,10 @@ pub enum Expectation {
 }
 
 pub trait Protocol<C, S: StreamSocket>: Sized {
+    type Seed: Any+Sized;
     /// Starting the protocol (e.g. accepted a socket)
-    fn create(sock: &mut S, scope: &mut Scope<C>) -> Request<Self>;
+    fn create(seed: Self::Seed, sock: &mut S, scope: &mut Scope<C>)
+        -> Request<Self>;
 
     /// The action WaitBytes or WaitDelimiter is complete
     fn bytes_read(self, transport: &mut Transport,
