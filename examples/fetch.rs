@@ -17,7 +17,7 @@ use time::{SteadyTime, Duration};
 use argparse::{ArgumentParser, Store};
 use mio::tcp::{TcpStream};
 use rotor_stream::{Stream, Transport, Protocol, Request, Expectation as E};
-use rotor::{Scope, Machine};
+use rotor::{Scope};
 
 
 struct Context;
@@ -145,13 +145,13 @@ fn main() {
     let mut event_loop = mio::EventLoop::new().unwrap();
     let mut handler = rotor::Handler::new(Context, &mut event_loop);
 
-    let conn = TcpStream::connect(
+    let sock = TcpStream::connect(
         // Any better way for current stable rust?
-        &(host, 80).to_socket_addrs().unwrap().next().unwrap());
+        &(host, 80).to_socket_addrs().unwrap().next().unwrap()).unwrap();
 
     let conn = handler.add_machine_with(&mut event_loop, |scope| {
-        Stream::<Context, TcpStream, Http>::create(
-            (conn.unwrap(), (host.to_string(), path.to_string())),
+        Stream::<Context, TcpStream, Http>::new(
+            sock, (host.to_string(), path.to_string()),
             scope)
     });
     assert!(conn.is_ok());

@@ -6,6 +6,12 @@ use mio::{TryAccept, EventSet, PollOpt, Evented};
 
 use {StreamSocket, Accept};
 
+
+pub trait Accepted<C, S: StreamSocket>: Machine<C> {
+    fn accepted(sock: S, scope: &mut Scope<C>) -> Result<Self, Box<Error>>;
+}
+
+
 impl<A, S, M> Accept<A, M>
     where A: TryAccept<Output=S> + Evented + Any,
           S: StreamSocket,
@@ -20,14 +26,14 @@ impl<A, S, M> Accept<A, M>
 
 impl<C, A, S, M> Machine<C> for Accept<A, M>
     where A: TryAccept<Output=S> + Evented + Any,
-          M: Machine<C, Seed=S>,
+          M: Machine<C> + Accepted<C, S>,
           S: StreamSocket,
 {
     type Seed = S;
     fn create(sock: S, scope: &mut Scope<C>)
         -> Result<Self, Box<Error>>
     {
-        M::create(sock, scope).map(Accept::Connection)
+        M::accepted(sock, scope).map(Accept::Connection)
     }
 
     fn ready(self, events: EventSet, scope: &mut Scope<C>)

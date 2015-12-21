@@ -29,6 +29,7 @@ mod stream;
 mod accept;
 
 pub use protocol::{Protocol, Expectation};
+pub use accept::{Accepted};
 
 use std::any::Any;
 use std::marker::PhantomData;

@@ -7,10 +7,11 @@ use time::SteadyTime;
 use rotor::{Response, Scope, Machine};
 use mio::{EventSet, PollOpt};
 use netbuf::Buf;
+use void::{Void, unreachable};
 
 use substr::find_substr;
 use {Expectation, Protocol, StreamSocket, Stream, StreamImpl, Request};
-use {Transport, Deadline};
+use {Transport, Deadline, Accepted};
 
 
 impl<S: StreamSocket> StreamImpl<S> {
@@ -75,7 +76,7 @@ impl<S: StreamSocket> StreamImpl<S> {
         }
     }
     fn action<C, M>(self, req: Request<M>, scope: &mut Scope<C>)
-        -> Response<Stream<C, S, M>, (S, M::Seed)>
+        -> Response<Stream<C, S, M>, Void>
         where M: Protocol<C, S>,
               S: StreamSocket
     {
@@ -129,6 +130,14 @@ impl<S: StreamSocket> StreamImpl<S> {
     }
 }
 
+impl<C, S, P> Accepted<C, S> for Stream<C, S, P>
+    where S: StreamSocket, P: Protocol<C, S, Seed=()>
+{
+    fn accepted(sock: S, scope: &mut Scope<C>) -> Result<Self, Box<Error>> {
+        Self::new(sock, (), scope)
+    }
+}
+
 impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
     fn decompose(self) -> (P, Expectation, StreamImpl<S>) {
         (self.fsm, self.expectation, StreamImpl {
@@ -155,11 +164,7 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
             phantom: PhantomData,
         }
     }
-}
-
-impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
-    type Seed = (S, P::Seed);
-    fn create((mut sock, seed): Self::Seed, scope: &mut Scope<C>)
+    pub fn new(mut sock: S, seed: P::Seed, scope: &mut Scope<C>)
         -> Result<Self, Box<Error>>
     {
         // Always register everything in edge-triggered mode.
@@ -189,6 +194,15 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
                 })
             }
         }
+    }
+}
+
+impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
+    type Seed = Void;
+    fn create(void: Void, _scope: &mut Scope<C>)
+        -> Result<Self, Box<Error>>
+    {
+        unreachable(void);
     }
     fn ready(self, _events: EventSet, scope: &mut Scope<C>)
         -> Response<Self, Self::Seed>
