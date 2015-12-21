@@ -24,7 +24,7 @@ pub enum Expectation {
     /// `bytes_read` action gets passed `num` bytes before the delimeter, or
     /// in other words, the position of the delimiter in the buffer.
     /// The delimiter is guaranteed to be in the buffer too.
-    Delimiter(&'static str, usize),
+    Delimiter(&'static [u8], usize),
     /// Wait until no more than N bytes is in output buffer
     ///
     /// This is going to be used for several cases:
