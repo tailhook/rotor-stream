@@ -80,9 +80,13 @@ impl<S: StreamSocket> StreamImpl<S> {
         where M: Protocol<C, S>,
               S: StreamSocket
     {
+        let old_timeout = self.timeout;
         match self._action(req, scope) {
             Ok(x) => Response::ok(x),
-            Err(()) => Response::done(),
+            Err(()) => {
+                scope.clear_timeout(old_timeout);
+                Response::done()
+            }
         }
     }
     // Returns Ok(true) to if we have read something, does not loop for reading
@@ -150,15 +154,26 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
     }
     fn compose(implem: StreamImpl<S>,
         (fsm, exp, dline): (P, Expectation, Deadline),
-        _scope: &mut Scope<C>)
+        scope: &mut Scope<C>)
         -> Stream<C, S, P>
     {
+        let mut timeout = implem.timeout;
+        if dline != implem.deadline {
+            scope.clear_timeout(timeout);
+            // Assuming that we can always add timeout since we have just
+            // cancelled one. It may be not true if timer is already expired
+            // or timeout is too far in future. But I'm not sure that killing
+            // state machine here is much better idea than panicking.
+            timeout = scope.timeout_ms(
+                (dline - SteadyTime::now()).num_milliseconds() as u64)
+                .expect("Can't replace timer");
+        }
         Stream {
             fsm: fsm,
             socket: implem.socket,
             expectation: exp,
-            deadline: dline, // TODO(tailhook) compare
-            timeout: implem.timeout, // TODO(tailhook) compare
+            deadline: dline,
+            timeout: timeout,
             inbuf: implem.inbuf,
             outbuf: implem.outbuf,
             phantom: PhantomData,
@@ -180,8 +195,9 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
             None => return Err(Box::new(ProtocolStop)),
             Some((m, exp, dline)) => {
                 let diff = dline - SteadyTime::now();
-                let timeout = try!(scope.timeout_ms(
-                    diff.num_milliseconds() as u64).map_err(|_| TimerError));
+                let timeout = scope.timeout_ms(
+                    diff.num_milliseconds() as u64)
+                    .expect("Can't insert timer");
                 Ok(Stream {
                     socket: sock,
                     expectation: exp,

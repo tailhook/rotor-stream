@@ -3,13 +3,11 @@ extern crate time;
 extern crate rotor;
 extern crate rotor_stream;
 
-use std::io::{Write, stderr};
-use std::error::Error;
+use std::io::{Write};
 
-use mio::{EventSet, PollOpt, TryRead, TryWrite};
 use mio::tcp::{TcpListener, TcpStream};
 use time::{SteadyTime, Duration};
-use rotor::{Machine, Response, Scope};
+use rotor::{Scope};
 use rotor_stream::{Accept, Stream, Protocol, Request, Transport};
 use rotor_stream::{Expectation as E};
 
@@ -44,19 +42,19 @@ impl Protocol<Context, TcpStream> for Http {
         Some((Http::SendResponse, E::Flush(0),
             SteadyTime::now() + Duration::seconds(10)))
     }
-    fn bytes_flushed(self, transport: &mut Transport,
-                     scope: &mut Scope<Context>)
+    fn bytes_flushed(self, _transport: &mut Transport,
+                     _scope: &mut Scope<Context>)
         -> Request<Self>
     {
         // TODO(tailhook) or maybe start over?
         None
     }
-    fn timeout(self, scope: &mut Scope<Context>) -> Request<Self> {
+    fn timeout(self, _scope: &mut Scope<Context>) -> Request<Self> {
         println!("Timeout");
         None
     }
 
-    fn wakeup(self, scope: &mut Scope<Context>) -> Request<Self> {
+    fn wakeup(self, _scope: &mut Scope<Context>) -> Request<Self> {
         unreachable!();
     }
 }
