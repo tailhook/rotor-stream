@@ -57,21 +57,21 @@ pub trait Protocol<C, S: StreamSocket>: Sized {
     /// example to yield `Bytes(4)` to read the header size and then yield
     /// bigger value to read the whole header at once. But be careful, if
     /// you don't consume bytes you will repeatedly receive them again.
-    fn bytes_read(self, transport: &mut Transport,
+    fn bytes_read(self, transport: &mut Transport<S>,
                   end: usize, scope: &mut Scope<C>)
         -> Request<Self>;
 
     /// The action Flush is complete
-    fn bytes_flushed(self, transport: &mut Transport,
+    fn bytes_flushed(self, transport: &mut Transport<S>,
                      scope: &mut Scope<C>)
         -> Request<Self>;
 
     /// Timeout happened, which means either deadline reached in
     /// Bytes, Delimiter, Flush. Or Sleep has passed.
-    fn timeout(self, transport: &mut Transport, scope: &mut Scope<C>)
+    fn timeout(self, transport: &mut Transport<S>, scope: &mut Scope<C>)
         -> Request<Self>;
 
     /// Message received (from the main loop)
-    fn wakeup(self, transport: &mut Transport, scope: &mut Scope<C>)
+    fn wakeup(self, transport: &mut Transport<S>, scope: &mut Scope<C>)
         -> Request<Self>;
 }

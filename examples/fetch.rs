@@ -46,7 +46,7 @@ impl<'a> Protocol<Context, TcpStream> for Http {
         Some((Http::SendRequest(req), E::Flush(0),
             SteadyTime::now() + Duration::seconds(10)))
     }
-    fn bytes_flushed(self, transport: &mut Transport,
+    fn bytes_flushed(self, transport: &mut Transport<TcpStream>,
         _scope: &mut Scope<Context>)
         -> Request<Self>
     {
@@ -59,7 +59,7 @@ impl<'a> Protocol<Context, TcpStream> for Http {
             _ => unreachable!(),
         }
     }
-    fn bytes_read(self, transport: &mut Transport,
+    fn bytes_read(self, transport: &mut Transport<TcpStream>,
                   end: usize, _scope: &mut Scope<Context>)
         -> Request<Self>
     {
@@ -106,7 +106,8 @@ impl<'a> Protocol<Context, TcpStream> for Http {
             }
         }
     }
-    fn timeout(self, _transport: &mut Transport, _scope: &mut Scope<Context>)
+    fn timeout(self, _transport: &mut Transport<TcpStream>,
+        _scope: &mut Scope<Context>)
         -> Request<Self>
     {
         writeln!(&mut stderr(), "Timeout reached").ok();
@@ -114,7 +115,8 @@ impl<'a> Protocol<Context, TcpStream> for Http {
     }
 
     /// Message received (from the main loop)
-    fn wakeup(self, _transport: &mut Transport, _scope: &mut Scope<Context>)
+    fn wakeup(self, _transport: &mut Transport<TcpStream>,
+        _scope: &mut Scope<Context>)
         -> Request<Self>
     {
         unreachable!();

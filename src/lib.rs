@@ -44,7 +44,8 @@ pub type Request<M> = Option<(M, Expectation, Deadline)>;
 // Any is needed to use Stream as a Seed for Machine
 pub trait StreamSocket: Read + Write + Evented + Any {}
 
-pub struct Transport<'a> {
+pub struct Transport<'a, S: StreamSocket> {
+    sock: &'a mut S,
     inbuf: &'a mut netbuf::Buf,
     outbuf: &'a mut netbuf::Buf,
 }

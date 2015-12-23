@@ -27,10 +27,11 @@ impl Protocol<Context, TcpStream> for Http {
         Some((Http::ReadHeaders, E::Delimiter(b"\r\n\r\n", 4096),
             SteadyTime::now() + Duration::seconds(10)))
     }
-    fn bytes_read(self, transport: &mut Transport,
+    fn bytes_read(self, transport: &mut Transport<TcpStream>,
                   _end: usize, _scope: &mut Scope<Context>)
         -> Request<Self>
     {
+        println!("Request from {:?}", transport.socket().local_addr());
         transport.output().write_all(concat!(
             "HTTP/1.0 200 OK\r\n",
             "Server: rotor-stream-example-serve\r\n",
@@ -42,21 +43,23 @@ impl Protocol<Context, TcpStream> for Http {
         Some((Http::SendResponse, E::Flush(0),
             SteadyTime::now() + Duration::seconds(10)))
     }
-    fn bytes_flushed(self, _transport: &mut Transport,
+    fn bytes_flushed(self, _transport: &mut Transport<TcpStream>,
                      _scope: &mut Scope<Context>)
         -> Request<Self>
     {
         // TODO(tailhook) or maybe start over?
         None
     }
-    fn timeout(self, _transport: &mut Transport, _scope: &mut Scope<Context>)
+    fn timeout(self, _transport: &mut Transport<TcpStream>,
+        _scope: &mut Scope<Context>)
         -> Request<Self>
     {
         println!("Timeout");
         None
     }
 
-    fn wakeup(self, _transport: &mut Transport, _scope: &mut Scope<Context>)
+    fn wakeup(self, _transport: &mut Transport<TcpStream>,
+        _scope: &mut Scope<Context>)
         -> Request<Self>
     {
         unreachable!();

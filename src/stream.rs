@@ -15,8 +15,9 @@ use {Transport, Deadline, Accepted};
 
 
 impl<S: StreamSocket> StreamImpl<S> {
-    fn transport(&mut self) -> Transport {
+    fn transport(&mut self) -> Transport<S> {
         Transport {
+            sock: &mut self.socket,
             inbuf: &mut self.inbuf,
             outbuf: &mut self.outbuf,
         }
