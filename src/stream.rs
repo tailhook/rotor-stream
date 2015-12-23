@@ -167,6 +167,7 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
             // state machine here is much better idea than panicking.
             timeout = scope.timeout_ms(
                 (dline - SteadyTime::now()).num_milliseconds() as u64)
+                // TODO(tailhook) can we process the error somehow?
                 .expect("Can't replace timer");
         }
         Stream {
@@ -198,6 +199,7 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
                 let diff = dline - SteadyTime::now();
                 let timeout = scope.timeout_ms(
                     diff.num_milliseconds() as u64)
+                    // TODO(tailhook) propagate error carefully
                     .expect("Can't insert timer");
                 Ok(Stream {
                     socket: sock,

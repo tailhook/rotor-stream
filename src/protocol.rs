@@ -47,6 +47,7 @@ pub enum Expectation {
 pub trait Protocol<C, S: StreamSocket>: Sized {
     type Seed: Any+Sized;
     /// Starting the protocol (e.g. accepted a socket)
+    // TODO(tailhook) transport be here instead of sock?
     fn create(seed: Self::Seed, sock: &mut S, scope: &mut Scope<C>)
         -> Request<Self>;
 
@@ -70,6 +71,23 @@ pub trait Protocol<C, S: StreamSocket>: Sized {
     /// Bytes, Delimiter, Flush. Or Sleep has passed.
     fn timeout(self, transport: &mut Transport<S>, scope: &mut Scope<C>)
         -> Request<Self>;
+
+    /// The method is called when too much bytes are read but no delimiter
+    /// is found within the number of bytes specified.
+    ///
+    /// The usual case is to just close the connection (because it's probably
+    /// DoS attack is going on or the protocol mismatch), but sometimes you
+    /// want to send error code, like 413 Entity Too Large for HTTP.
+    ///
+    /// Note it's your responsibility to wait for the buffer to be flushed.
+    /// If you write to the buffer and then return None immediately, your
+    /// data will be silently discarded.
+    fn delimiter_not_found(self, _transport: &mut Transport<S>,
+        _scope: &mut Scope<C>)
+        -> Request<Self>
+    {
+        None
+    }
 
     /// Message received (from the main loop)
     fn wakeup(self, transport: &mut Transport<S>, scope: &mut Scope<C>)
