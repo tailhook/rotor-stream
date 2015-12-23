@@ -51,6 +51,12 @@ pub trait Protocol<C, S: StreamSocket>: Sized {
         -> Request<Self>;
 
     /// The action WaitBytes or WaitDelimiter is complete
+    ///
+    /// Note you don't have to consume input buffer. The data is in the
+    /// transport, but you are free to ignore it. This may be useful for
+    /// example to yield `Bytes(4)` to read the header size and then yield
+    /// bigger value to read the whole header at once. But be careful, if
+    /// you don't consume bytes you will repeatedly receive them again.
     fn bytes_read(self, transport: &mut Transport,
                   end: usize, scope: &mut Scope<C>)
         -> Request<Self>;
@@ -62,8 +68,10 @@ pub trait Protocol<C, S: StreamSocket>: Sized {
 
     /// Timeout happened, which means either deadline reached in
     /// Bytes, Delimiter, Flush. Or Sleep has passed.
+    // TODO(tailhook) add Transport argument
     fn timeout(self, scope: &mut Scope<C>) -> Request<Self>;
 
     /// Message received (from the main loop)
+    // TODO(tailhook) add Transport argument
     fn wakeup(self, scope: &mut Scope<C>) -> Request<Self>;
 }
