@@ -106,14 +106,16 @@ impl<'a> Protocol<Context, TcpStream> for Http {
             }
         }
     }
-    fn timeout(self, _scope: &mut Scope<Context>) -> Request<Self>
+    fn timeout(self, _transport: &mut Transport, _scope: &mut Scope<Context>)
+        -> Request<Self>
     {
         writeln!(&mut stderr(), "Timeout reached").ok();
         return None;
     }
 
     /// Message received (from the main loop)
-    fn wakeup(self, _scope: &mut Scope<Context>) -> Request<Self>
+    fn wakeup(self, _transport: &mut Transport, _scope: &mut Scope<Context>)
+        -> Request<Self>
     {
         unreachable!();
     }

@@ -15,6 +15,12 @@ use {Transport, Deadline, Accepted};
 
 
 impl<S: StreamSocket> StreamImpl<S> {
+    fn transport(&mut self) -> Transport {
+        Transport {
+            inbuf: &mut self.inbuf,
+            outbuf: &mut self.outbuf,
+        }
+    }
     fn _action<C, M>(mut self, req: Request<M>, scope: &mut Scope<C>)
         -> Result<Stream<C, S, M>, ()>
         where M: Protocol<C, S>,
@@ -31,10 +37,8 @@ impl<S: StreamSocket> StreamImpl<S> {
                 Bytes(num) => {
                     loop {
                         if self.inbuf.len() >= num {
-                            req = try!(req.0.bytes_read(&mut Transport {
-                                inbuf: &mut self.inbuf,
-                                outbuf: &mut self.outbuf,
-                            }, num, scope).ok_or(()));
+                            req = try!(req.0.bytes_read(&mut self.transport(),
+                                num, scope).ok_or(()));
                             continue 'outer;
                         }
                         if !try!(self.read()) {
@@ -45,10 +49,8 @@ impl<S: StreamSocket> StreamImpl<S> {
                 Delimiter(delim, max) => {
                     loop {
                         if let Some(num) = find_substr(&self.inbuf[..], delim) {
-                            req = try!(req.0.bytes_read(&mut Transport {
-                                inbuf: &mut self.inbuf,
-                                outbuf: &mut self.outbuf,
-                            }, num, scope).ok_or(()));
+                            req = try!(req.0.bytes_read(&mut self.transport(),
+                                num, scope).ok_or(()));
                             continue 'outer;
                         }
                         if self.inbuf.len() > max {
@@ -61,10 +63,8 @@ impl<S: StreamSocket> StreamImpl<S> {
                 }
                 Flush(num) => {
                     if self.outbuf.len() <= num {
-                        req = try!(req.0.bytes_flushed(&mut Transport {
-                            inbuf: &mut self.inbuf,
-                            outbuf: &mut self.outbuf,
-                        }, scope).ok_or(()));
+                        req = try!(req.0.bytes_flushed(&mut self.transport(),
+                            scope).ok_or(()));
                     } else {
                         return Ok(Stream::compose(self, req, scope));
                     }
@@ -233,16 +233,18 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
     }
     fn timeout(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
         if Deadline::now() >= self.deadline {
-            let (fsm, _exp, imp) = self.decompose();
-            imp.action(fsm.timeout(scope), scope)
+            let (fsm, _exp, mut imp) = self.decompose();
+            let res = fsm.timeout(&mut imp.transport(), scope);
+            imp.action(res, scope)
         } else {
             // Spurious timeouts are possible for the couple of reasons
             Response::ok(self)
         }
     }
     fn wakeup(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
-        let (fsm, _exp, imp) = self.decompose();
-        imp.action(fsm.wakeup(scope), scope)
+        let (fsm, _exp, mut imp) = self.decompose();
+        let res = fsm.wakeup(&mut imp.transport(), scope);
+        imp.action(res, scope)
     }
 }
 

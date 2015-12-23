@@ -68,10 +68,10 @@ pub trait Protocol<C, S: StreamSocket>: Sized {
 
     /// Timeout happened, which means either deadline reached in
     /// Bytes, Delimiter, Flush. Or Sleep has passed.
-    // TODO(tailhook) add Transport argument
-    fn timeout(self, scope: &mut Scope<C>) -> Request<Self>;
+    fn timeout(self, transport: &mut Transport, scope: &mut Scope<C>)
+        -> Request<Self>;
 
     /// Message received (from the main loop)
-    // TODO(tailhook) add Transport argument
-    fn wakeup(self, scope: &mut Scope<C>) -> Request<Self>;
+    fn wakeup(self, transport: &mut Transport, scope: &mut Scope<C>)
+        -> Request<Self>;
 }

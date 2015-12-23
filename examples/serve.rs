@@ -49,12 +49,16 @@ impl Protocol<Context, TcpStream> for Http {
         // TODO(tailhook) or maybe start over?
         None
     }
-    fn timeout(self, _scope: &mut Scope<Context>) -> Request<Self> {
+    fn timeout(self, _transport: &mut Transport, _scope: &mut Scope<Context>)
+        -> Request<Self>
+    {
         println!("Timeout");
         None
     }
 
-    fn wakeup(self, _scope: &mut Scope<Context>) -> Request<Self> {
+    fn wakeup(self, _transport: &mut Transport, _scope: &mut Scope<Context>)
+        -> Request<Self>
+    {
         unreachable!();
     }
 }
