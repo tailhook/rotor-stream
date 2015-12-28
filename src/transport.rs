@@ -28,4 +28,12 @@ impl<'a, S: StreamSocket> Transport<'a, S> {
     pub fn output<'x>(&'x mut self) -> &'x mut Buf {
         self.outbuf
     }
+    /// Get a references to both buffers (input, output)
+    ///
+    /// It's useful when you want to pass both things somewhere along the
+    /// chain of calls. See `input()` and `output()` methods for more comments
+    /// on buffer usage
+    pub fn buffers<'x>(&'x mut self) -> (&'x mut Buf, &'x mut Buf) {
+        (self.inbuf, self.outbuf)
+    }
 }
