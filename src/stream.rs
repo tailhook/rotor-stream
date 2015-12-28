@@ -14,6 +14,26 @@ use {Expectation, Protocol, StreamSocket, Stream, StreamImpl, Request};
 use {Transport, Deadline, Accepted};
 
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IoOp {
+    Done,
+    NoOp,
+    Eof,
+    Error,
+}
+
+impl IoOp {
+    fn is_done(self) -> Result<bool, ()> {
+        match self {
+            IoOp::Done => Ok(true),
+            IoOp::NoOp => Ok(false),
+            IoOp::Eof => Ok(false),
+            IoOp::Error => Err(()),
+        }
+    }
+}
+
+
 impl<S: StreamSocket> StreamImpl<S> {
     fn transport(&mut self) -> Transport<S> {
         Transport {
@@ -42,23 +62,48 @@ impl<S: StreamSocket> StreamImpl<S> {
                                 num, scope).ok_or(()));
                             continue 'outer;
                         }
-                        if !try!(self.read()) {
+                        if !try!(self.read().is_done()) {
                             return Ok(Stream::compose(self, req, scope));
                         }
                     }
                 }
-                Delimiter(delim, max) => {
+                Delimiter(min, delim, max) => {
                     loop {
-                        if let Some(num) = find_substr(&self.inbuf[..], delim) {
-                            req = try!(req.0.bytes_read(&mut self.transport(),
-                                num, scope).ok_or(()));
-                            continue 'outer;
+                        if self.inbuf.len() > min {
+                            let opt = find_substr(&self.inbuf[min..], delim);
+                            if let Some(num) = opt {
+                                req = try!(req.0.bytes_read(
+                                    &mut self.transport(),
+                                    num, scope).ok_or(()));
+                                continue 'outer;
+                            }
                         }
                         if self.inbuf.len() > max {
                             return Err(());
                         }
-                        if !try!(self.read()) {
+                        if !try!(self.read().is_done()) {
                             return Ok(Stream::compose(self, req, scope));
+                        }
+                    }
+                }
+                Eof(max) => {
+                    loop {
+                        if self.inbuf.len() > max {
+                            return Err(());
+                        }
+                        match self.read() {
+                            IoOp::Eof => {
+                                let num = self.inbuf.len();
+                                req = try!(req.0.bytes_read(
+                                    &mut self.transport(),
+                                    num, scope).ok_or(()));
+                                continue 'outer;
+                            }
+                            IoOp::Done => continue,
+                            IoOp::Error => return Err(()),
+                            IoOp::NoOp => {
+                                return Ok(Stream::compose(self, req, scope));
+                            }
                         }
                     }
                 }
@@ -93,19 +138,20 @@ impl<S: StreamSocket> StreamImpl<S> {
     // Returns Ok(true) to if we have read something, does not loop for reading
     // because this might use whole memory, and we may parse and consume the
     // input instead of buffering it whole.
-    fn read(&mut self) -> Result<bool, ()> {
+    fn read(&mut self) -> IoOp {
         match self.inbuf.read_from(&mut self.socket) {
             Ok(0) => {
-                return Err(());
+                IoOp::Eof
             }
             Ok(_) => {
-                return Ok(true);
+                IoOp::Done
             }
             Err(ref e) if e.kind() == WouldBlock => {
-                return Ok(false);
+                IoOp::NoOp
             }
             Err(_) => {
-                return Err(());
+                // TODO(tailhook) should we log the exception?
+                IoOp::Error
             }
         }
     }

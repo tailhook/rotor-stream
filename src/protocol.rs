@@ -17,14 +17,22 @@ pub enum Expectation {
     /// Note that real number of bytes that `netbuf::Buf` might contain is less
     /// than 4Gb. So this value can't be as big as `usize::MAX`
     Bytes(usize),
-    /// Read until delimiter, but no more than N bytes.
+    /// Read until EOF (socket writing end is shut down on peer
+    ///
+    /// But no more than `max_bytes`
+    Eof(usize),
+    /// Read until delimiter
+    ///
+    /// Parameters: `offset`, `delimiter`, `max_bytes`
     ///
     /// Only static strings are support for delimiter now.
     ///
     /// `bytes_read` action gets passed `num` bytes before the delimeter, or
     /// in other words, the position of the delimiter in the buffer.
-    /// The delimiter is guaranteed to be in the buffer too.
-    Delimiter(&'static [u8], usize),
+    /// The delimiter is guaranteed to be in the buffer too. The `max_bytes`
+    /// do include the offset itself.
+    ///
+    Delimiter(usize, &'static [u8], usize),
     /// Wait until no more than N bytes is in output buffer
     ///
     /// This is going to be used for several cases:

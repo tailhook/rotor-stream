@@ -24,7 +24,7 @@ impl Protocol<Context, TcpStream> for Http {
     fn create(_seed: (), _sock: &mut TcpStream, _scope: &mut Scope<Context>)
         -> Request<Self>
     {
-        Some((Http::ReadHeaders, E::Delimiter(b"\r\n\r\n", 4096),
+        Some((Http::ReadHeaders, E::Delimiter(0, b"\r\n\r\n", 4096),
             SteadyTime::now() + Duration::seconds(10)))
     }
     fn bytes_read(self, transport: &mut Transport<TcpStream>,

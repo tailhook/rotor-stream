@@ -53,7 +53,7 @@ impl<'a> Protocol<Context, TcpStream> for Http {
         match self {
             Http::SendRequest(val) => {
                 transport.output().extend(val.as_bytes());
-                Some((Http::ReadHeaders, E::Delimiter(b"\r\n\r\n", 4096),
+                Some((Http::ReadHeaders, E::Delimiter(0, b"\r\n\r\n", 4096),
                     SteadyTime::now() + Duration::seconds(10)))
             }
             _ => unreachable!(),
