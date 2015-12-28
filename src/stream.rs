@@ -86,7 +86,32 @@ impl<S: StreamSocket> StreamImpl<S> {
                         }
                     }
                 }
-                Eof(max) => {
+                Eof(min) => {
+                    loop {
+                        if self.inbuf.len() > min {
+                            let num = self.inbuf.len();
+                            req = try!(req.0.bytes_read(
+                                &mut self.transport(),
+                                num, scope).ok_or(()));
+                            continue 'outer;
+                        }
+                        match self.read() {
+                            IoOp::Eof => {
+                                let num = self.inbuf.len();
+                                req = try!(req.0.bytes_read(
+                                    &mut self.transport(),
+                                    num, scope).ok_or(()));
+                                continue 'outer;
+                            }
+                            IoOp::Done => continue,
+                            IoOp::Error => return Err(()),
+                            IoOp::NoOp => {
+                                return Ok(Stream::compose(self, req, scope));
+                            }
+                        }
+                    }
+                }
+                BufferEof(max) => {
                     loop {
                         if self.inbuf.len() > max {
                             return Err(());
