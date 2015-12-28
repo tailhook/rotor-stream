@@ -17,18 +17,6 @@ pub enum Expectation {
     /// Note that real number of bytes that `netbuf::Buf` might contain is less
     /// than 4Gb. So this value can't be as big as `usize::MAX`
     Bytes(usize),
-    /// Buffered read until EOF (socket writing end is shut down on peer)
-    ///
-    /// This yield whole buffered data if that fits `max_bytes` bytes,
-    /// otherwise silently closes the connection.
-    ///
-    /// This is similar to Delimiter, except treats Eof as delimiter
-    BufferEof(usize),
-    /// Read until EOF (socket writing end is shut down on peer)
-    ///
-    /// This is similar to Bytes(x) except it returns already read bytes
-    /// instead of failing on Eof
-    Eof(usize),
     /// Read until delimiter
     ///
     /// Parameters: `offset`, `delimiter`, `max_bytes`
@@ -41,6 +29,18 @@ pub enum Expectation {
     /// do include the offset itself.
     ///
     Delimiter(usize, &'static [u8], usize),
+    /// Buffered read until EOF (peer executed `shutdown(x, SHUT_WR)`)
+    ///
+    /// This yield whole buffered data if that fits `max_bytes` bytes,
+    /// otherwise silently closes the connection.
+    ///
+    /// This is similar to Delimiter, except treats Eof as delimiter
+    BufferEof(usize),
+    /// Read until EOF (peer executed `shutdown(x, SHUT_WR)`)
+    ///
+    /// This is similar to Bytes(x) except it returns already read bytes
+    /// instead of failing on end of stream
+    Eof(usize),
     /// Wait until no more than N bytes is in output buffer
     ///
     /// This is going to be used for several cases:
