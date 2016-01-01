@@ -1,7 +1,8 @@
 use std::fmt;
+use std::io;
 use std::error::Error;
 use std::marker::PhantomData;
-use std::io::ErrorKind::WouldBlock;
+use std::io::ErrorKind::{WouldBlock, BrokenPipe};
 
 use time::SteadyTime;
 use rotor::{Response, Scope, Machine};
@@ -11,28 +12,16 @@ use void::{Void, unreachable};
 
 use substr::find_substr;
 use {Expectation, Protocol, StreamSocket, Stream, StreamImpl, Request};
-use {Transport, Deadline, Accepted};
+use {Transport, Deadline, Accepted, Exception};
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 enum IoOp {
     Done,
     NoOp,
-    Eof,
-    Error,
+    Eos,
+    Error(io::Error),
 }
-
-impl IoOp {
-    fn is_done(self) -> Result<bool, ()> {
-        match self {
-            IoOp::Done => Ok(true),
-            IoOp::NoOp => Ok(false),
-            IoOp::Eof => Ok(false),
-            IoOp::Error => Err(()),
-        }
-    }
-}
-
 
 impl<S: StreamSocket> StreamImpl<S> {
     fn transport(&mut self) -> Transport<S> {
@@ -49,10 +38,45 @@ impl<S: StreamSocket> StreamImpl<S> {
     {
         use Expectation::*;
         let mut req = try!(req.ok_or(()));
-        let mut can_write = try!(self.write());
+        let mut can_write = match self.write() {
+            IoOp::Done => true,
+            IoOp::NoOp => false,
+            IoOp::Eos => {
+                req = try!(req.0.exception(
+                    &mut self.transport(),
+                    Exception::EndOfStream,
+                    scope).ok_or(()));
+                false
+            }
+            IoOp::Error(e) => {
+                req = try!(req.0.exception(
+                    &mut self.transport(),
+                    Exception::WriteError(e),
+                    scope).ok_or(()));
+                false
+            }
+        };
         'outer: loop {
             if can_write {
-                can_write = try!(self.write());
+                can_write = match self.write() {
+                    IoOp::Done => true,
+                    IoOp::NoOp => false,
+                    IoOp::Eos => {
+                        req = try!(req.0.exception(
+                            &mut self.transport(),
+                            Exception::EndOfStream,
+                            scope).ok_or(()));
+                        self.outbuf.remove_range(..);
+                        true
+                    }
+                    IoOp::Error(e) => {
+                        req = try!(req.0.exception(
+                            &mut self.transport(),
+                            Exception::WriteError(e),
+                            scope).ok_or(()));
+                        true
+                    }
+                };
             }
             match req.1 {
                 Bytes(num) => {
@@ -62,8 +86,25 @@ impl<S: StreamSocket> StreamImpl<S> {
                                 num, scope).ok_or(()));
                             continue 'outer;
                         }
-                        if !try!(self.read().is_done()) {
-                            return Ok(Stream::compose(self, req, scope));
+                        match self.read() {
+                            IoOp::Done => {}
+                            IoOp::NoOp => {
+                                return Ok(Stream::compose(self, req, scope));
+                            }
+                            IoOp::Eos => {
+                                req = try!(req.0.exception(
+                                    &mut self.transport(),
+                                    Exception::EndOfStream,
+                                    scope).ok_or(()));
+                                continue 'outer;
+                            }
+                            IoOp::Error(e) => {
+                                req = try!(req.0.exception(
+                                    &mut self.transport(),
+                                    Exception::ReadError(e),
+                                    scope).ok_or(()));
+                                continue 'outer;
+                            }
                         }
                     }
                 }
@@ -81,53 +122,24 @@ impl<S: StreamSocket> StreamImpl<S> {
                         if self.inbuf.len() > max {
                             return Err(());
                         }
-                        if !try!(self.read().is_done()) {
-                            return Ok(Stream::compose(self, req, scope));
-                        }
-                    }
-                }
-                Eof(min) => {
-                    loop {
-                        if self.inbuf.len() > min {
-                            let num = self.inbuf.len();
-                            req = try!(req.0.bytes_read(
-                                &mut self.transport(),
-                                num, scope).ok_or(()));
-                            continue 'outer;
-                        }
                         match self.read() {
-                            IoOp::Eof => {
-                                let num = self.inbuf.len();
-                                req = try!(req.0.bytes_read(
-                                    &mut self.transport(),
-                                    num, scope).ok_or(()));
-                                continue 'outer;
-                            }
-                            IoOp::Done => continue,
-                            IoOp::Error => return Err(()),
+                            IoOp::Done => {}
                             IoOp::NoOp => {
                                 return Ok(Stream::compose(self, req, scope));
                             }
-                        }
-                    }
-                }
-                BufferEof(max) => {
-                    loop {
-                        if self.inbuf.len() > max {
-                            return Err(());
-                        }
-                        match self.read() {
-                            IoOp::Eof => {
-                                let num = self.inbuf.len();
-                                req = try!(req.0.bytes_read(
+                            IoOp::Eos => {
+                                req = try!(req.0.exception(
                                     &mut self.transport(),
-                                    num, scope).ok_or(()));
+                                    Exception::EndOfStream,
+                                    scope).ok_or(()));
                                 continue 'outer;
                             }
-                            IoOp::Done => continue,
-                            IoOp::Error => return Err(()),
-                            IoOp::NoOp => {
-                                return Ok(Stream::compose(self, req, scope));
+                            IoOp::Error(e) => {
+                                req = try!(req.0.exception(
+                                    &mut self.transport(),
+                                    Exception::ReadError(e),
+                                    scope).ok_or(()));
+                                continue 'outer;
                             }
                         }
                     }
@@ -165,42 +177,24 @@ impl<S: StreamSocket> StreamImpl<S> {
     // input instead of buffering it whole.
     fn read(&mut self) -> IoOp {
         match self.inbuf.read_from(&mut self.socket) {
-            Ok(0) => {
-                IoOp::Eof
-            }
-            Ok(_) => {
-                IoOp::Done
-            }
-            Err(ref e) if e.kind() == WouldBlock => {
-                IoOp::NoOp
-            }
-            Err(_) => {
-                // TODO(tailhook) should we log the exception?
-                IoOp::Error
-            }
+            Ok(0) => IoOp::Eos,
+            Ok(_) => IoOp::Done,
+            Err(ref e) if e.kind() == BrokenPipe => IoOp::Eos,
+            Err(ref e) if e.kind() == WouldBlock => IoOp::NoOp,
+            Err(e) => IoOp::Error(e),
         }
     }
-    // Returns Ok(true) if buffer is empty, returns Ok(false) if write returned
-    // EAGAIN, so subsequent item is expected to return too, and we need to
-    // wait for next edge-triggered POLLOUT to be able to write.
-    fn write(&mut self) -> Result<bool, ()> {
+    fn write(&mut self) -> IoOp {
         loop {
             if self.outbuf.len() == 0 {
-                return Ok(true);
+                return IoOp::Done;
             }
             match self.outbuf.write_to(&mut self.socket) {
-                Ok(0) => {
-                    return Err(());
-                }
-                Ok(_) => {
-                    continue;
-                }
-                Err(ref e) if e.kind() == WouldBlock  => {
-                    return Ok(self.outbuf.len() == 0);
-                }
-                Err(_e) => {
-                    return Err(());
-                }
+                Ok(0) => return IoOp::Eos,
+                Ok(_) => continue,
+                Err(ref e) if e.kind() == BrokenPipe => return IoOp::Eos,
+                Err(ref e) if e.kind() == WouldBlock => return IoOp::NoOp,
+                Err(e) => return IoOp::Error(e),
             }
         }
     }

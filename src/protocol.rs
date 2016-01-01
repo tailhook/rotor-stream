@@ -1,7 +1,36 @@
+use std::io;
 use std::any::Any;
 use rotor::Scope;
 
 use {Transport, Request, StreamSocket};
+
+quick_error!{
+    #[derive(Debug)]
+    pub enum Exception {
+        /// End of stream reached (when reading)
+        ///
+        /// This may be not a broken expectation, we just notify of end of
+        /// stream always (if the state machine is still alive)
+        EndOfStream {
+            description("End of stream reached")
+        }
+        /// Limit for the number of bytes reached
+        ///
+        /// This is called when there is alredy maximum bytes in the buffer
+        /// (third argument of `Delimiter`) but no delimiter found.
+        LimitReached {
+            description("Reached the limit of bytes buffered")
+        }
+        ReadError(err: io::Error) {
+            description(err.description())
+            display("{}", err)
+        }
+        WriteError(err: io::Error) {
+            description(err.description())
+            display("{}", err)
+        }
+    }
+}
 
 
 // #[derive(Clone, Clone)]
@@ -12,7 +41,13 @@ pub enum Expectation {
     /// Read number of bytes
     ///
     /// The buffer that is passed to bytes_read might contain more bytes, but
-    /// `num` will contain a number of bytes passed into `Bytes` constructor.
+    /// `num` parameter of the `bytes_read()` method will contain a number of
+    /// bytes passed into `Bytes` constructor.
+    ///
+    /// Note that bytes passed here is neither limit on bytes actually read
+    /// from the network (we resize buffer as convenient for memory allocator
+    /// and read as much as possible), nor is the preallocated buffer size
+    /// (we don't preallocate the buffer to be less vulnerable to DoS attacks).
     ///
     /// Note that real number of bytes that `netbuf::Buf` might contain is less
     /// than 4Gb. So this value can't be as big as `usize::MAX`
@@ -21,7 +56,7 @@ pub enum Expectation {
     ///
     /// Parameters: `offset`, `delimiter`, `max_bytes`
     ///
-    /// Only static strings are support for delimiter now.
+    /// Only static strings are supported for delimiter now.
     ///
     /// `bytes_read` action gets passed `num` bytes before the delimeter, or
     /// in other words, the position of the delimiter in the buffer.
@@ -29,18 +64,6 @@ pub enum Expectation {
     /// do include the offset itself.
     ///
     Delimiter(usize, &'static [u8], usize),
-    /// Buffered read until EOF (peer executed `shutdown(x, SHUT_WR)`)
-    ///
-    /// This yield whole buffered data if that fits `max_bytes` bytes,
-    /// otherwise silently closes the connection.
-    ///
-    /// This is similar to Delimiter, except treats Eof as delimiter
-    BufferEof(usize),
-    /// Read until EOF (peer executed `shutdown(x, SHUT_WR)`)
-    ///
-    /// This is similar to Bytes(x) except it returns already read bytes
-    /// instead of failing on end of stream
-    Eof(usize),
     /// Wait until no more than N bytes is in output buffer
     ///
     /// This is going to be used for several cases:
@@ -98,7 +121,7 @@ pub trait Protocol<C, S: StreamSocket>: Sized {
     /// Note it's your responsibility to wait for the buffer to be flushed.
     /// If you write to the buffer and then return None immediately, your
     /// data will be silently discarded.
-    fn delimiter_not_found(self, _transport: &mut Transport<S>,
+    fn exception(self, _transport: &mut Transport<S>, _reason: Exception,
         _scope: &mut Scope<C>)
         -> Request<Self>
     {

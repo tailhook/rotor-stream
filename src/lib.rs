@@ -21,6 +21,8 @@ extern crate rotor;
 extern crate time;
 extern crate mio;
 extern crate void;
+#[macro_use] extern crate quick_error;
+
 
 mod substr;
 mod transport;
@@ -28,7 +30,7 @@ mod protocol;
 mod stream;
 mod accept;
 
-pub use protocol::{Protocol, Expectation};
+pub use protocol::{Protocol, Expectation, Exception};
 pub use accept::{Accepted};
 
 use std::any::Any;
