@@ -44,8 +44,9 @@ impl<S: StreamSocket> StreamImpl<S> {
             IoOp::Eos => {
                 req = try!(req.0.exception(
                     &mut self.transport(),
-                    Exception::EndOfStream,
+                    Exception::WriteError(WriteZero),
                     scope).ok_or(()));
+                self.outbuf.remove_range(..);
                 false
             }
             IoOp::Error(e) => {
@@ -53,6 +54,7 @@ impl<S: StreamSocket> StreamImpl<S> {
                     &mut self.transport(),
                     Exception::WriteError(e),
                     scope).ok_or(()));
+                // TODO(tailhook) should we flush buffer here too?
                 false
             }
         };
@@ -64,17 +66,18 @@ impl<S: StreamSocket> StreamImpl<S> {
                     IoOp::Eos => {
                         req = try!(req.0.exception(
                             &mut self.transport(),
-                            Exception::EndOfStream,
+                            Exception::WriteError(WriteZero),
                             scope).ok_or(()));
                         self.outbuf.remove_range(..);
-                        true
+                        false
                     }
                     IoOp::Error(e) => {
                         req = try!(req.0.exception(
                             &mut self.transport(),
                             Exception::WriteError(e),
                             scope).ok_or(()));
-                        true
+                        // TODO(tailhook) should we flush buffer here too?
+                        false
                     }
                 };
             }

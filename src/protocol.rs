@@ -11,23 +11,26 @@ quick_error!{
         ///
         /// This may be not a broken expectation, we just notify of end of
         /// stream always (if the state machine is still alive)
+        ///
+        /// Note: the equivalent of end of stream for write system call is
+        /// translated to `WriteError(WriteZero)`
         EndOfStream {
-            description("End of stream reached")
+            description("end of stream reached")
         }
         /// Limit for the number of bytes reached
         ///
         /// This is called when there is alredy maximum bytes in the buffer
         /// (third argument of `Delimiter`) but no delimiter found.
         LimitReached {
-            description("Reached the limit of bytes buffered")
+            description("reached the limit of bytes buffered")
         }
         ReadError(err: io::Error) {
-            description(err.description())
-            display("{}", err)
+            description("error when reading from stream")
+            display("read error: {}", err)
         }
         WriteError(err: io::Error) {
-            description(err.description())
-            display("{}", err)
+            description("error when writing to stream")
+            display("write error: {}", err)
         }
     }
 }
