@@ -2,7 +2,7 @@ use std::fmt;
 use std::io;
 use std::error::Error;
 use std::marker::PhantomData;
-use std::io::ErrorKind::{WouldBlock, BrokenPipe};
+use std::io::ErrorKind::{WouldBlock, BrokenPipe, WriteZero};
 
 use time::SteadyTime;
 use rotor::{Response, Scope, Machine};
@@ -44,7 +44,8 @@ impl<S: StreamSocket> StreamImpl<S> {
             IoOp::Eos => {
                 req = try!(req.0.exception(
                     &mut self.transport(),
-                    Exception::WriteError(WriteZero),
+                    Exception::WriteError(io::Error::new(
+                        WriteZero, "failed to write whole buffer")),
                     scope).ok_or(()));
                 self.outbuf.remove_range(..);
                 false
@@ -66,7 +67,8 @@ impl<S: StreamSocket> StreamImpl<S> {
                     IoOp::Eos => {
                         req = try!(req.0.exception(
                             &mut self.transport(),
-                            Exception::WriteError(WriteZero),
+                            Exception::WriteError(io::Error::new(
+                                WriteZero, "failed to write whole buffer")),
                             scope).ok_or(()));
                         self.outbuf.remove_range(..);
                         false
