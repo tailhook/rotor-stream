@@ -267,10 +267,9 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
             None => return Err(Box::new(ProtocolStop)),
             Some((m, exp, dline)) => {
                 let diff = dline - SteadyTime::now();
-                let timeout = scope.timeout_ms(
+                let timeout = try!(scope.timeout_ms(
                     diff.num_milliseconds() as u64)
-                    // TODO(tailhook) propagate error carefully
-                    .expect("Can't insert timer");
+                    .map_err(|_| TimerError));
                 Ok(Stream {
                     socket: sock,
                     expectation: exp,
@@ -348,7 +347,7 @@ pub struct TimerError;
 
 impl fmt::Display for TimerError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "TimerError")
+        write!(fmt, "error inserting timer")
     }
 }
 
