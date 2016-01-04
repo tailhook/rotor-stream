@@ -8,7 +8,7 @@ license = "MIT"
 readme = "README.rst"
 keywords = ["stream", "rotor", "tcp", "sockets", "mio"]
 homepage = "http://github.com/tailhook/rotor-stream"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["paul@colomiets.name"]
 
 [dependencies]
