@@ -28,7 +28,9 @@ enum Http {
 }
 
 
-impl<'a> Protocol<Context, TcpStream> for Http {
+impl<'a> Protocol for Http {
+    type Context = Context;
+    type Socket = TcpStream;
     type Seed = (String, String);
     fn create((host, path): Self::Seed, _sock: &mut TcpStream,
         _scope: &mut Scope<Context>)

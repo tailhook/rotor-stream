@@ -62,7 +62,7 @@ pub enum Accept<A: TryAccept+Sized, M: Machine> {
     Connection(M),
 }
 
-pub struct Stream<C, S: StreamSocket, P: Protocol<C, S>> {
+pub struct Stream<C, S: StreamSocket, P: Protocol<Socket=S, Context=C>> {
     socket: S,
     fsm: P,
     expectation: Expectation,

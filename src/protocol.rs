@@ -86,11 +86,14 @@ pub enum Expectation {
     Sleep,
 }
 
-pub trait Protocol<C, S: StreamSocket>: Sized {
+pub trait Protocol: Sized {
+    type Context;
+    type Socket: StreamSocket;
     type Seed: Any+Sized;
     /// Starting the protocol (e.g. accepted a socket)
     // TODO(tailhook) transport be here instead of sock?
-    fn create(seed: Self::Seed, sock: &mut S, scope: &mut Scope<C>)
+    fn create(seed: Self::Seed, sock: &mut Self::Socket,
+        scope: &mut Scope<Self::Context>)
         -> Request<Self>;
 
     /// The action WaitBytes or WaitDelimiter is complete
@@ -100,18 +103,19 @@ pub trait Protocol<C, S: StreamSocket>: Sized {
     /// example to yield `Bytes(4)` to read the header size and then yield
     /// bigger value to read the whole header at once. But be careful, if
     /// you don't consume bytes you will repeatedly receive them again.
-    fn bytes_read(self, transport: &mut Transport<S>,
-                  end: usize, scope: &mut Scope<C>)
+    fn bytes_read(self, transport: &mut Transport<Self::Socket>,
+                  end: usize, scope: &mut Scope<Self::Context>)
         -> Request<Self>;
 
     /// The action Flush is complete
-    fn bytes_flushed(self, transport: &mut Transport<S>,
-                     scope: &mut Scope<C>)
+    fn bytes_flushed(self, transport: &mut Transport<Self::Socket>,
+                     scope: &mut Scope<Self::Context>)
         -> Request<Self>;
 
     /// Timeout happened, which means either deadline reached in
     /// Bytes, Delimiter, Flush. Or Sleep has passed.
-    fn timeout(self, transport: &mut Transport<S>, scope: &mut Scope<C>)
+    fn timeout(self, transport: &mut Transport<Self::Socket>,
+        scope: &mut Scope<Self::Context>)
         -> Request<Self>;
 
     /// The method is called when too much bytes are read but no delimiter
@@ -124,14 +128,15 @@ pub trait Protocol<C, S: StreamSocket>: Sized {
     /// Note it's your responsibility to wait for the buffer to be flushed.
     /// If you write to the buffer and then return None immediately, your
     /// data will be silently discarded.
-    fn exception(self, _transport: &mut Transport<S>, _reason: Exception,
-        _scope: &mut Scope<C>)
+    fn exception(self, _transport: &mut Transport<Self::Socket>,
+        _reason: Exception, _scope: &mut Scope<Self::Context>)
         -> Request<Self>
     {
         None
     }
 
     /// Message received (from the main loop)
-    fn wakeup(self, transport: &mut Transport<S>, scope: &mut Scope<C>)
+    fn wakeup(self, transport: &mut Transport<Self::Socket>,
+        scope: &mut Scope<Self::Context>)
         -> Request<Self>;
 }

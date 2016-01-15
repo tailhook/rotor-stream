@@ -31,7 +31,7 @@ impl<S: StreamSocket> StreamImpl<S> {
     }
     fn _action<C, M>(mut self, req: Request<M>, scope: &mut Scope<C>)
         -> Result<Stream<C, S, M>, ()>
-        where M: Protocol<C, S>,
+        where M: Protocol<Socket=S, Context=C>,
               S: StreamSocket,
     {
         use Expectation::*;
@@ -163,7 +163,7 @@ impl<S: StreamSocket> StreamImpl<S> {
     }
     fn action<C, M>(self, req: Request<M>, scope: &mut Scope<C>)
         -> Response<Stream<C, S, M>, Void>
-        where M: Protocol<C, S>,
+        where M: Protocol<Socket=S, Context=C>,
               S: StreamSocket
     {
         let old_timeout = self.timeout;
@@ -204,14 +204,14 @@ impl<S: StreamSocket> StreamImpl<S> {
 }
 
 impl<C, S, P> Accepted<C, S> for Stream<C, S, P>
-    where S: StreamSocket, P: Protocol<C, S, Seed=()>
+    where S: StreamSocket, P: Protocol<Socket=S, Seed=(), Context=C>
 {
     fn accepted(sock: S, scope: &mut Scope<C>) -> Result<Self, Box<Error>> {
         Self::new(sock, (), scope)
     }
 }
 
-impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
+impl<C, S: StreamSocket, P: Protocol<Socket=S, Context=C>> Stream<C, S, P> {
     fn decompose(self) -> (P, Expectation, StreamImpl<S>) {
         (self.fsm, self.expectation, StreamImpl {
             socket: self.socket,
@@ -283,7 +283,9 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
     }
 }
 
-impl<C, S: StreamSocket, P: Protocol<C, S>> Machine for Stream<C, S, P> {
+impl<C, S: StreamSocket, P> Machine for Stream<C, S, P>
+    where P: Protocol<Socket=S, Context=C>
+{
     type Context = C;
     type Seed = Void;
     fn create(void: Void, _scope: &mut Scope<C>)
