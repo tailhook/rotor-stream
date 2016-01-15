@@ -1,5 +1,4 @@
-use netbuf::Buf;
-use {Transport, StreamSocket};
+use {Buf, Transport, StreamSocket};
 
 
 /// Transport is thing that provides buffered I/O for stream sockets

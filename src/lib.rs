@@ -40,6 +40,7 @@ use time::SteadyTime;
 use rotor::{Machine, Evented, Timeout};
 use rotor::mio::{TryAccept};
 
+pub use netbuf::Buf;
 pub type Deadline = SteadyTime;
 pub type Request<M> = Option<(M, Expectation, Deadline)>;
 
@@ -48,8 +49,8 @@ pub trait StreamSocket: Read + Write + Evented + Any {}
 
 pub struct Transport<'a, S: StreamSocket> {
     sock: &'a mut S,
-    inbuf: &'a mut netbuf::Buf,
-    outbuf: &'a mut netbuf::Buf,
+    inbuf: &'a mut Buf,
+    outbuf: &'a mut Buf,
 }
 
 /// Socket acceptor State Machine
@@ -67,8 +68,8 @@ pub struct Stream<C, S: StreamSocket, P: Protocol<C, S>> {
     expectation: Expectation,
     deadline: Deadline,
     timeout: Timeout,
-    inbuf: netbuf::Buf,
-    outbuf: netbuf::Buf,
+    inbuf: Buf,
+    outbuf: Buf,
     phantom: PhantomData<*const C>,
 }
 
@@ -76,8 +77,8 @@ struct StreamImpl<S: StreamSocket> {
     socket: S,
     deadline: Deadline,
     timeout: Timeout,
-    inbuf: netbuf::Buf,
-    outbuf: netbuf::Buf,
+    inbuf: Buf,
+    outbuf: Buf,
 }
 
 impl<T> StreamSocket for T where T: Read, T: Write, T: Evented, T:Any {}

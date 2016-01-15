@@ -6,12 +6,11 @@ use std::io::ErrorKind::{WouldBlock, BrokenPipe, WriteZero};
 
 use time::SteadyTime;
 use rotor::{Response, Scope, Machine, EventSet, PollOpt};
-use netbuf::Buf;
 use void::{Void, unreachable};
 
 use substr::find_substr;
 use {Expectation, Protocol, StreamSocket, Stream, StreamImpl, Request};
-use {Transport, Deadline, Accepted, Exception};
+use {Buf, Transport, Deadline, Accepted, Exception};
 
 
 #[derive(Debug)]
