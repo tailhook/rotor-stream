@@ -33,7 +33,6 @@ pub use protocol::{Protocol, Expectation, Exception};
 pub use accept::{Accepted};
 
 use std::any::Any;
-use std::marker::PhantomData;
 use std::io::{Read, Write};
 use time::SteadyTime;
 
@@ -62,15 +61,14 @@ pub enum Accept<A: TryAccept+Sized, M: Machine> {
     Connection(M),
 }
 
-pub struct Stream<C, S: StreamSocket, P: Protocol<Socket=S, Context=C>> {
-    socket: S,
+pub struct Stream<P: Protocol> {
+    socket: P::Socket,
     fsm: P,
     expectation: Expectation,
     deadline: Deadline,
     timeout: Timeout,
     inbuf: Buf,
     outbuf: Buf,
-    phantom: PhantomData<*const C>,
 }
 
 struct StreamImpl<S: StreamSocket> {

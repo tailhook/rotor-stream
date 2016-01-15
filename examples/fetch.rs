@@ -155,7 +155,7 @@ fn main() {
         &(host, 80).to_socket_addrs().unwrap().next().unwrap()).unwrap();
 
     let conn = handler.add_machine_with(&mut event_loop, |scope| {
-        Stream::<Context, TcpStream, Http>::new(
+        Stream::<Http>::new(
             sock, (host.to_string(), path.to_string()),
             scope)
     });

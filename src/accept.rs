@@ -7,17 +7,17 @@ use rotor::mio::{TryAccept};
 use {StreamSocket, Accept};
 
 
-pub trait Accepted<C, S: StreamSocket>: Machine<Context=C> {
-    fn accepted(sock: S, scope: &mut Scope<C>) -> Result<Self, Box<Error>>;
+pub trait Accepted<S: StreamSocket>: Machine {
+    fn accepted(sock: S, scope: &mut Scope<Self::Context>)
+        -> Result<Self, Box<Error>>;
 }
 
 
-impl<A, S, M> Accept<A, M>
-    where A: TryAccept<Output=S> + Evented + Any,
-          S: StreamSocket,
+impl<A, M> Accept<A, M>
+    where A: TryAccept + Evented + Any,
           M: Machine
 {
-    pub fn new<C>(sock: A, scope: &mut Scope<C>)
+    pub fn new(sock: A, scope: &mut Scope<M::Context>)
         -> Result<Self, Box<Error>>
     {
         try!(scope.register(&sock, EventSet::readable(), PollOpt::edge()));
@@ -25,20 +25,20 @@ impl<A, S, M> Accept<A, M>
     }
 }
 
-impl<C, A, S, M> Machine for Accept<A, M>
+impl<A, S, M> Machine for Accept<A, M>
     where A: TryAccept<Output=S> + Evented + Any,
-          M: Machine<Context=C> + Accepted<C, S>,
           S: StreamSocket,
+          M: Machine + Accepted<S>,
 {
-    type Context = C;
+    type Context = M::Context;
     type Seed = S;
-    fn create(sock: S, scope: &mut Scope<C>)
+    fn create(sock: S, scope: &mut Scope<Self::Context>)
         -> Result<Self, Box<Error>>
     {
         M::accepted(sock, scope).map(Accept::Connection)
     }
 
-    fn ready(self, events: EventSet, scope: &mut Scope<C>)
+    fn ready(self, events: EventSet, scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
     {
         match self {
@@ -63,7 +63,7 @@ impl<C, A, S, M> Machine for Accept<A, M>
         }
     }
 
-    fn spawned(self, _scope: &mut Scope<C>)
+    fn spawned(self, _scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
     {
         match self {
@@ -87,7 +87,9 @@ impl<C, A, S, M> Machine for Accept<A, M>
         }
     }
 
-    fn timeout(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
+    fn timeout(self, scope: &mut Scope<Self::Context>)
+        -> Response<Self, Self::Seed>
+    {
         match self {
             Accept::Server(_) => unreachable!(),
             Accept::Connection(m) => {
@@ -96,7 +98,9 @@ impl<C, A, S, M> Machine for Accept<A, M>
         }
     }
 
-    fn wakeup(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
+    fn wakeup(self, scope: &mut Scope<Self::Context>)
+        -> Response<Self, Self::Seed>
+    {
         match self {
             Accept::Server(_) => unreachable!(),
             Accept::Connection(m) => {

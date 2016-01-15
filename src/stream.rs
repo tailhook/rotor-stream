@@ -1,7 +1,6 @@
 use std::fmt;
 use std::io;
 use std::error::Error;
-use std::marker::PhantomData;
 use std::io::ErrorKind::{WouldBlock, BrokenPipe, WriteZero};
 
 use time::SteadyTime;
@@ -29,10 +28,9 @@ impl<S: StreamSocket> StreamImpl<S> {
             outbuf: &mut self.outbuf,
         }
     }
-    fn _action<C, M>(mut self, req: Request<M>, scope: &mut Scope<C>)
-        -> Result<Stream<C, S, M>, ()>
-        where M: Protocol<Socket=S, Context=C>,
-              S: StreamSocket,
+    fn _action<M>(mut self, req: Request<M>, scope: &mut Scope<M::Context>)
+        -> Result<Stream<M>, ()>
+        where M: Protocol<Socket=S>
     {
         use Expectation::*;
         let mut req = try!(req.ok_or(()));
@@ -161,10 +159,9 @@ impl<S: StreamSocket> StreamImpl<S> {
             }
         }
     }
-    fn action<C, M>(self, req: Request<M>, scope: &mut Scope<C>)
-        -> Response<Stream<C, S, M>, Void>
-        where M: Protocol<Socket=S, Context=C>,
-              S: StreamSocket
+    fn action<M>(self, req: Request<M>, scope: &mut Scope<M::Context>)
+        -> Response<Stream<M>, Void>
+        where M: Protocol<Socket=S>
     {
         let old_timeout = self.timeout;
         match self._action(req, scope) {
@@ -203,16 +200,18 @@ impl<S: StreamSocket> StreamImpl<S> {
     }
 }
 
-impl<C, S, P> Accepted<C, S> for Stream<C, S, P>
-    where S: StreamSocket, P: Protocol<Socket=S, Seed=(), Context=C>
+impl<P: Protocol> Accepted<P::Socket> for Stream<P>
+    where P: Protocol<Seed=()>
 {
-    fn accepted(sock: S, scope: &mut Scope<C>) -> Result<Self, Box<Error>> {
+    fn accepted(sock: P::Socket, scope: &mut Scope<Self::Context>)
+        -> Result<Self, Box<Error>>
+    {
         Self::new(sock, (), scope)
     }
 }
 
-impl<C, S: StreamSocket, P: Protocol<Socket=S, Context=C>> Stream<C, S, P> {
-    fn decompose(self) -> (P, Expectation, StreamImpl<S>) {
+impl<P: Protocol> Stream<P> {
+    fn decompose(self) -> (P, Expectation, StreamImpl<P::Socket>) {
         (self.fsm, self.expectation, StreamImpl {
             socket: self.socket,
             deadline: self.deadline,
@@ -221,10 +220,10 @@ impl<C, S: StreamSocket, P: Protocol<Socket=S, Context=C>> Stream<C, S, P> {
             outbuf: self.outbuf,
         })
     }
-    fn compose(implem: StreamImpl<S>,
+    fn compose(implem: StreamImpl<P::Socket>,
         (fsm, exp, dline): (P, Expectation, Deadline),
-        scope: &mut Scope<C>)
-        -> Stream<C, S, P>
+        scope: &mut Scope<P::Context>)
+        -> Stream<P>
     {
         let mut timeout = implem.timeout;
         if dline != implem.deadline {
@@ -246,10 +245,10 @@ impl<C, S: StreamSocket, P: Protocol<Socket=S, Context=C>> Stream<C, S, P> {
             timeout: timeout,
             inbuf: implem.inbuf,
             outbuf: implem.outbuf,
-            phantom: PhantomData,
         }
     }
-    pub fn new(mut sock: S, seed: P::Seed, scope: &mut Scope<C>)
+    pub fn new(mut sock: P::Socket, seed: P::Seed,
+        scope: &mut Scope<P::Context>)
         -> Result<Self, Box<Error>>
     {
         // Always register everything in edge-triggered mode.
@@ -276,24 +275,22 @@ impl<C, S: StreamSocket, P: Protocol<Socket=S, Context=C>> Stream<C, S, P> {
                     fsm: m,
                     inbuf: Buf::new(),
                     outbuf: Buf::new(),
-                    phantom: PhantomData,
                 })
             }
         }
     }
 }
 
-impl<C, S: StreamSocket, P> Machine for Stream<C, S, P>
-    where P: Protocol<Socket=S, Context=C>
+impl<P: Protocol> Machine for Stream<P>
 {
-    type Context = C;
+    type Context = P::Context;
     type Seed = Void;
-    fn create(void: Void, _scope: &mut Scope<C>)
+    fn create(void: Void, _scope: &mut Scope<Self::Context>)
         -> Result<Self, Box<Error>>
     {
         unreachable(void);
     }
-    fn ready(self, _events: EventSet, scope: &mut Scope<C>)
+    fn ready(self, _events: EventSet, scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
     {
         // TODO(tailhook) use `events` to optimize reading
@@ -301,10 +298,14 @@ impl<C, S: StreamSocket, P> Machine for Stream<C, S, P>
         let deadline = imp.deadline;
         imp.action(Some((fsm, exp, deadline)), scope)
     }
-    fn spawned(self, _scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
+    fn spawned(self, _scope: &mut Scope<Self::Context>)
+        -> Response<Self, Self::Seed>
+    {
         unreachable!();
     }
-    fn timeout(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
+    fn timeout(self, scope: &mut Scope<Self::Context>)
+        -> Response<Self, Self::Seed>
+    {
         if Deadline::now() >= self.deadline {
             let (fsm, _exp, mut imp) = self.decompose();
             let res = fsm.timeout(&mut imp.transport(), scope);
@@ -314,7 +315,9 @@ impl<C, S: StreamSocket, P> Machine for Stream<C, S, P>
             Response::ok(self)
         }
     }
-    fn wakeup(self, scope: &mut Scope<C>) -> Response<Self, Self::Seed> {
+    fn wakeup(self, scope: &mut Scope<Self::Context>)
+        -> Response<Self, Self::Seed>
+    {
         let (fsm, _exp, mut imp) = self.decompose();
         let res = fsm.wakeup(&mut imp.transport(), scope);
         imp.action(res, scope)
