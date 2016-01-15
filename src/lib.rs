@@ -56,7 +56,7 @@ pub struct Transport<'a, S: StreamSocket> {
 ///
 /// TODO(tailhook) Currently this panics when there is no slab space when
 /// accepting a connection. This may be fixed by sleeping and retrying
-pub enum Accept<A: TryAccept+Sized, M: Machine> {
+pub enum Accept<M: Machine, A: TryAccept+Sized> {
     Server(A),
     Connection(M),
 }

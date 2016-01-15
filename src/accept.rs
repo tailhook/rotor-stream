@@ -13,7 +13,7 @@ pub trait Accepted<S: StreamSocket>: Machine {
 }
 
 
-impl<A, M> Accept<A, M>
+impl<A, M> Accept<M, A>
     where A: TryAccept + Evented + Any,
           M: Machine
 {
@@ -25,7 +25,7 @@ impl<A, M> Accept<A, M>
     }
 }
 
-impl<A, S, M> Machine for Accept<A, M>
+impl<A, S, M> Machine for Accept<M, A>
     where A: TryAccept<Output=S> + Evented + Any,
           S: StreamSocket,
           M: Machine + Accepted<S>,
