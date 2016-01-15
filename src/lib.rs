@@ -40,7 +40,7 @@ use time::SteadyTime;
 use rotor::{Machine, Evented, Timeout};
 use rotor::mio::{TryAccept};
 
-pub use netbuf::Buf;
+pub use netbuf::{Buf, MAX_BUF_SIZE};
 pub type Deadline = SteadyTime;
 pub type Request<M> = Option<(M, Expectation, Deadline)>;
 
