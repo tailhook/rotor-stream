@@ -5,8 +5,7 @@ use std::marker::PhantomData;
 use std::io::ErrorKind::{WouldBlock, BrokenPipe, WriteZero};
 
 use time::SteadyTime;
-use rotor::{Response, Scope, Machine};
-use mio::{EventSet, PollOpt};
+use rotor::{Response, Scope, Machine, EventSet, PollOpt};
 use netbuf::Buf;
 use void::{Void, unreachable};
 
@@ -285,7 +284,8 @@ impl<C, S: StreamSocket, P: Protocol<C, S>> Stream<C, S, P> {
     }
 }
 
-impl<C, S: StreamSocket, P: Protocol<C, S>> Machine<C> for Stream<C, S, P> {
+impl<C, S: StreamSocket, P: Protocol<C, S>> Machine for Stream<C, S, P> {
+    type Context = C;
     type Seed = Void;
     fn create(void: Void, _scope: &mut Scope<C>)
         -> Result<Self, Box<Error>>

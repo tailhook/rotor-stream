@@ -1,6 +1,5 @@
 use std::process::exit;
 
-extern crate mio;
 extern crate nix;
 extern crate rotor;
 extern crate rotor_stream;
@@ -15,7 +14,7 @@ use std::io::{stdout, stderr, Write};
 
 use time::{SteadyTime, Duration};
 use argparse::{ArgumentParser, Store};
-use mio::tcp::{TcpStream};
+use rotor::mio::tcp::{TcpStream};
 use rotor_stream::{Stream, Transport, Protocol, Request, Expectation as E};
 use rotor::{Scope};
 
@@ -146,7 +145,7 @@ fn main() {
     };
     println!("Host: {} (port: 80), path: {}", host, path);
 
-    let mut event_loop = mio::EventLoop::new().unwrap();
+    let mut event_loop = rotor::EventLoop::new().unwrap();
     let mut handler = rotor::Handler::new(Context, &mut event_loop);
 
     let sock = TcpStream::connect(

@@ -1,13 +1,13 @@
 use std::error::Error;
 use std::any::Any;
 
-use rotor::{Machine, Scope, Response};
-use mio::{TryAccept, EventSet, PollOpt, Evented};
+use rotor::{Machine, Scope, Response, EventSet, PollOpt, Evented};
+use rotor::mio::{TryAccept};
 
 use {StreamSocket, Accept};
 
 
-pub trait Accepted<C, S: StreamSocket>: Machine<C> {
+pub trait Accepted<C, S: StreamSocket>: Machine<Context=C> {
     fn accepted(sock: S, scope: &mut Scope<C>) -> Result<Self, Box<Error>>;
 }
 
@@ -15,6 +15,7 @@ pub trait Accepted<C, S: StreamSocket>: Machine<C> {
 impl<A, S, M> Accept<A, M>
     where A: TryAccept<Output=S> + Evented + Any,
           S: StreamSocket,
+          M: Machine
 {
     pub fn new<C>(sock: A, scope: &mut Scope<C>)
         -> Result<Self, Box<Error>>
@@ -24,11 +25,12 @@ impl<A, S, M> Accept<A, M>
     }
 }
 
-impl<C, A, S, M> Machine<C> for Accept<A, M>
+impl<C, A, S, M> Machine for Accept<A, M>
     where A: TryAccept<Output=S> + Evented + Any,
-          M: Machine<C> + Accepted<C, S>,
+          M: Machine<Context=C> + Accepted<C, S>,
           S: StreamSocket,
 {
+    type Context = C;
     type Seed = S;
     fn create(sock: S, scope: &mut Scope<C>)
         -> Result<Self, Box<Error>>

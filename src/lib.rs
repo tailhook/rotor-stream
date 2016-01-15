@@ -19,7 +19,6 @@ extern crate netbuf;
 extern crate memchr;
 extern crate rotor;
 extern crate time;
-extern crate mio;
 extern crate void;
 #[macro_use] extern crate quick_error;
 
@@ -38,7 +37,8 @@ use std::marker::PhantomData;
 use std::io::{Read, Write};
 use time::SteadyTime;
 
-use mio::{Evented, Timeout, TryAccept};
+use rotor::{Machine, Evented, Timeout};
+use rotor::mio::{TryAccept};
 
 pub type Deadline = SteadyTime;
 pub type Request<M> = Option<(M, Expectation, Deadline)>;
@@ -56,7 +56,7 @@ pub struct Transport<'a, S: StreamSocket> {
 ///
 /// TODO(tailhook) Currently this panics when there is no slab space when
 /// accepting a connection. This may be fixed by sleeping and retrying
-pub enum Accept<A: TryAccept+Sized, M: Sized> {
+pub enum Accept<A: TryAccept+Sized, M: Machine> {
     Server(A),
     Connection(M),
 }

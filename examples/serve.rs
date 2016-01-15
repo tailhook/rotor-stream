@@ -1,11 +1,10 @@
-extern crate mio;
 extern crate time;
 extern crate rotor;
 extern crate rotor_stream;
 
 use std::io::{Write};
 
-use mio::tcp::{TcpListener, TcpStream};
+use rotor::mio::tcp::{TcpListener, TcpStream};
 use time::{SteadyTime, Duration};
 use rotor::{Scope};
 use rotor_stream::{Accept, Stream, Protocol, Request, Transport};
@@ -67,7 +66,7 @@ impl Protocol<Context, TcpStream> for Http {
 }
 
 fn main() {
-    let mut event_loop = mio::EventLoop::new().unwrap();
+    let mut event_loop = rotor::EventLoop::new().unwrap();
     let mut handler = rotor::Handler::new(Context, &mut event_loop);
     let lst = TcpListener::bind(&"127.0.0.1:3000".parse().unwrap()).unwrap();
     let ok = handler.add_machine_with(&mut event_loop, |scope| {
