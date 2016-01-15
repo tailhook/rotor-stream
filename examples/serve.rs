@@ -72,7 +72,7 @@ fn main() {
     let mut handler = rotor::Handler::new(Context, &mut event_loop);
     let lst = TcpListener::bind(&"127.0.0.1:3000".parse().unwrap()).unwrap();
     let ok = handler.add_machine_with(&mut event_loop, |scope| {
-        Accept::<TcpListener, Stream<Http>>::new(lst, scope)
+        Accept::<Stream<Http>, _>::new(lst, scope)
     }).is_ok();
     assert!(ok);
     event_loop.run(&mut handler).unwrap();
