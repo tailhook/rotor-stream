@@ -1,7 +1,8 @@
 use std::error::Error;
 use std::any::Any;
 
-use rotor::{Machine, Scope, Response, EventSet, PollOpt, Evented};
+use rotor::{Machine, Response, EventSet, PollOpt, Evented};
+use rotor::{Scope, GenericScope};
 use rotor::mio::{TryAccept};
 
 use {StreamSocket, Accept};
@@ -17,7 +18,7 @@ impl<M, A> Accept<M, A>
     where A: TryAccept + Evented + Any,
           M: Machine
 {
-    pub fn new(sock: A, scope: &mut Scope<M::Context>)
+    pub fn new<S: GenericScope>(sock: A, scope: &mut S)
         -> Result<Self, Box<Error>>
     {
         try!(scope.register(&sock, EventSet::readable(), PollOpt::edge()));

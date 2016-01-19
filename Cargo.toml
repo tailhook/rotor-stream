@@ -12,7 +12,7 @@ version = "0.3.0"
 authors = ["paul@colomiets.name"]
 
 [dependencies]
-rotor = {git="git://github.com/tailhook/rotor", rev="cde4393"}
+rotor = {git="git://github.com/tailhook/rotor", rev="4c142d4"}
 netbuf = "0.3.1"
 memchr = "0.1.7"
 time = "0.1.34"

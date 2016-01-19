@@ -147,18 +147,17 @@ fn main() {
     };
     println!("Host: {} (port: 80), path: {}", host, path);
 
-    let mut event_loop = rotor::EventLoop::new().unwrap();
-    let mut handler = rotor::Handler::new(Context, &mut event_loop);
+    let event_loop = rotor::Loop::new(&rotor::Config::new()).unwrap();
 
     let sock = TcpStream::connect(
         // Any better way for current stable rust?
         &(host, 80).to_socket_addrs().unwrap().next().unwrap()).unwrap();
 
-    let conn = handler.add_machine_with(&mut event_loop, |scope| {
+    let mut loop_inst = event_loop.instantiate(Context);
+    loop_inst.add_machine_with(|scope| {
         Stream::<Http>::new(
             sock, (host.to_string(), path.to_string()),
             scope)
-    });
-    assert!(conn.is_ok());
-    event_loop.run(&mut handler).unwrap();
+    }).unwrap();
+    loop_inst.run().unwrap();
 }
