@@ -1,5 +1,4 @@
 use std::io;
-use std::any::Any;
 use rotor::Scope;
 
 use {Transport, Request, StreamSocket};
@@ -89,7 +88,7 @@ pub enum Expectation {
 pub trait Protocol: Sized {
     type Context;
     type Socket: StreamSocket;
-    type Seed: Any+Sized;
+    type Seed;
     /// Starting the protocol (e.g. accepted a socket)
     // TODO(tailhook) transport be here instead of sock?
     fn create(seed: Self::Seed, sock: &mut Self::Socket,
