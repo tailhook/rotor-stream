@@ -1,8 +1,7 @@
-use std::error::Error;
 use std::any::Any;
 
 use rotor::{Machine, Response, EventSet, PollOpt, Evented};
-use rotor::{Scope, GenericScope};
+use rotor::{Scope, GenericScope, Void};
 use rotor::mio::{TryAccept};
 
 use {StreamSocket, Accept};
@@ -10,7 +9,7 @@ use {StreamSocket, Accept};
 
 pub trait Accepted<S: StreamSocket>: Machine {
     fn accepted(sock: S, scope: &mut Scope<Self::Context>)
-        -> Result<Self, Box<Error>>;
+        -> Response<Self, Void>;
 }
 
 
@@ -19,10 +18,13 @@ impl<M, A> Accept<M, A>
           M: Machine
 {
     pub fn new<S: GenericScope>(sock: A, scope: &mut S)
-        -> Result<Self, Box<Error>>
+        -> Response<Self, Void>
     {
-        try!(scope.register(&sock, EventSet::readable(), PollOpt::edge()));
-        Ok(Accept::Server(sock))
+        match scope.register(&sock, EventSet::readable(), PollOpt::edge()) {
+            Ok(()) => {}
+            Err(e) => return Response::error(Box::new(e)),
+        }
+        Response::ok(Accept::Server(sock))
     }
 }
 
@@ -34,9 +36,9 @@ impl<M, A, S> Machine for Accept<M, A>
     type Context = M::Context;
     type Seed = S;
     fn create(sock: S, scope: &mut Scope<Self::Context>)
-        -> Result<Self, Box<Error>>
+        -> Response<Self, Void>
     {
-        M::accepted(sock, scope).map(Accept::Connection)
+        M::accepted(sock, scope).wrap(Accept::Connection)
     }
 
     fn ready(self, events: EventSet, scope: &mut Scope<Self::Context>)

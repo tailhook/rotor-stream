@@ -1,15 +1,15 @@
-use std::fmt;
 use std::io;
 use std::error::Error;
 use std::io::ErrorKind::{WouldBlock, BrokenPipe, WriteZero, ConnectionReset};
 
-use time::SteadyTime;
-use rotor::{Response, Scope, Machine, EventSet, PollOpt};
-use void::{Void, unreachable};
+use rotor::{Response, Scope, Machine, EventSet, PollOpt, Time};
+use rotor::void::{Void, unreachable};
 
 use substr::find_substr;
-use {Expectation, Protocol, StreamSocket, Stream, StreamImpl, Request};
-use {Buf, Transport, Deadline, Accepted, Exception};
+use extensions::{ScopeExt, ResponseExt};
+use {Expectation, Protocol, StreamSocket, Stream, StreamImpl};
+use {Buf, Transport, Accepted, Exception, Intent};
+use {ProtocolStop};
 
 
 #[derive(Debug)]
@@ -20,6 +20,15 @@ enum IoOp {
     Error(io::Error),
 }
 
+fn to_result<P: Protocol>(intent: Intent<P>)
+    -> Result<(P, Expectation, Option<Time>), Option<Box<Error>>>
+{
+    match intent.0 {
+        Ok(x) => Ok((x, intent.1, intent.2)),
+        Err(e) => Err(e),
+    }
+}
+
 impl<S: StreamSocket> StreamImpl<S> {
     fn transport(&mut self) -> Transport<S> {
         Transport {
@@ -28,30 +37,44 @@ impl<S: StreamSocket> StreamImpl<S> {
             outbuf: &mut self.outbuf,
         }
     }
-    fn _action<M>(mut self, req: Request<M>, scope: &mut Scope<M::Context>)
-        -> Result<Stream<M>, ()>
+    fn action<M>(self, intent: Intent<M>,
+        scope: &mut Scope<M::Context>)
+        -> Response<Stream<M>, Void>
         where M: Protocol<Socket=S>
     {
+        match self._action(intent, scope) {
+            Ok(stream) => {
+                let dline = stream.deadline;
+                Response::ok(stream).deadline_opt(dline)
+            }
+            Err(Some(e)) => Response::error(e),
+            Err(None) => Response::done(),
+        }
+    }
+    fn _action<P>(mut self, intent: Intent<P>,
+        scope: &mut Scope<P::Context>)
+        -> Result<Stream<P>, Option<Box<Error>>>
+        where P: Protocol<Socket=S>
+    {
         use Expectation::*;
-        let mut req = try!(req.ok_or(()));
+        let mut intent = try!(to_result(intent));
         let mut can_write = match self.write() {
             IoOp::Done => true,
             IoOp::NoOp => false,
             IoOp::Eos => {
-                req = try!(req.0.exception(
+                intent = try!(to_result(intent.0.exception(
                     &mut self.transport(),
                     Exception::WriteError(io::Error::new(
                         WriteZero, "failed to write whole buffer")),
-                    scope).ok_or(()));
+                    scope)));
                 self.outbuf.remove_range(..);
                 false
             }
             IoOp::Error(e) => {
-                req = try!(req.0.exception(
+                intent = try!(to_result(intent.0.exception(
                     &mut self.transport(),
                     Exception::WriteError(e),
-                    scope).ok_or(()));
-                // TODO(tailhook) should we flush buffer here too?
+                    scope)));
                 false
             }
         };
@@ -61,49 +84,49 @@ impl<S: StreamSocket> StreamImpl<S> {
                     IoOp::Done => true,
                     IoOp::NoOp => false,
                     IoOp::Eos => {
-                        req = try!(req.0.exception(
+                        intent = try!(to_result(intent.0.exception(
                             &mut self.transport(),
                             Exception::WriteError(io::Error::new(
                                 WriteZero, "failed to write whole buffer")),
-                            scope).ok_or(()));
+                            scope)));
                         self.outbuf.remove_range(..);
                         false
                     }
                     IoOp::Error(e) => {
-                        req = try!(req.0.exception(
+                        intent = try!(to_result(intent.0.exception(
                             &mut self.transport(),
                             Exception::WriteError(e),
-                            scope).ok_or(()));
-                        // TODO(tailhook) should we flush buffer here too?
+                            scope)));
                         false
                     }
                 };
             }
-            match req.1 {
+            match intent.1 {
                 Bytes(num) => {
                     loop {
                         if self.inbuf.len() >= num {
-                            req = try!(req.0.bytes_read(&mut self.transport(),
-                                num, scope).ok_or(()));
+                            intent = try!(to_result(intent.0.bytes_read(
+                                &mut self.transport(),
+                                num, scope)));
                             continue 'outer;
                         }
                         match self.read() {
                             IoOp::Done => {}
                             IoOp::NoOp => {
-                                return Ok(Stream::compose(self, req, scope));
+                                return Ok(Stream::compose(self, intent));
                             }
                             IoOp::Eos => {
-                                req = try!(req.0.exception(
+                                intent = try!(to_result(intent.0.exception(
                                     &mut self.transport(),
                                     Exception::EndOfStream,
-                                    scope).ok_or(()));
+                                    scope)));
                                 continue 'outer;
                             }
                             IoOp::Error(e) => {
-                                req = try!(req.0.exception(
+                                intent = try!(to_result(intent.0.exception(
                                     &mut self.transport(),
                                     Exception::ReadError(e),
-                                    scope).ok_or(()));
+                                    scope)));
                                 continue 'outer;
                             }
                         }
@@ -114,32 +137,36 @@ impl<S: StreamSocket> StreamImpl<S> {
                         if self.inbuf.len() > min {
                             let opt = find_substr(&self.inbuf[min..], delim);
                             if let Some(num) = opt {
-                                req = try!(req.0.bytes_read(
+                                intent = try!(to_result(intent.0.bytes_read(
                                     &mut self.transport(),
-                                    num, scope).ok_or(()));
+                                    num, scope)));
                                 continue 'outer;
                             }
                         }
                         if self.inbuf.len() > max {
-                            return Err(());
+                            intent = try!(to_result(intent.0.exception(
+                                &mut self.transport(),
+                                Exception::LimitReached,
+                                scope)));
+                            continue 'outer;
                         }
                         match self.read() {
                             IoOp::Done => {}
                             IoOp::NoOp => {
-                                return Ok(Stream::compose(self, req, scope));
+                                return Ok(Stream::compose(self, intent));
                             }
                             IoOp::Eos => {
-                                req = try!(req.0.exception(
+                                intent = try!(to_result(intent.0.exception(
                                     &mut self.transport(),
                                     Exception::EndOfStream,
-                                    scope).ok_or(()));
+                                    scope)));
                                 continue 'outer;
                             }
                             IoOp::Error(e) => {
-                                req = try!(req.0.exception(
+                                intent = try!(to_result(intent.0.exception(
                                     &mut self.transport(),
                                     Exception::ReadError(e),
-                                    scope).ok_or(()));
+                                    scope)));
                                 continue 'outer;
                             }
                         }
@@ -147,28 +174,15 @@ impl<S: StreamSocket> StreamImpl<S> {
                 }
                 Flush(num) => {
                     if self.outbuf.len() <= num {
-                        req = try!(req.0.bytes_flushed(&mut self.transport(),
-                            scope).ok_or(()));
+                        intent = try!(to_result(intent.0.bytes_flushed(
+                            &mut self.transport(), scope)));
                     } else {
-                        return Ok(Stream::compose(self, req, scope));
+                        return Ok(Stream::compose(self, intent));
                     }
                 }
                 Sleep => {
-                    return Ok(Stream::compose(self, req, scope));
+                    return Ok(Stream::compose(self, intent));
                 }
-            }
-        }
-    }
-    fn action<M>(self, req: Request<M>, scope: &mut Scope<M::Context>)
-        -> Response<Stream<M>, Void>
-        where M: Protocol<Socket=S>
-    {
-        let old_timeout = self.timeout;
-        match self._action(req, scope) {
-            Ok(x) => Response::ok(x),
-            Err(()) => {
-                scope.clear_timeout(old_timeout);
-                Response::done()
             }
         }
     }
@@ -208,7 +222,7 @@ impl<P: Protocol> Accepted<P::Socket> for Stream<P>
     where P: Protocol<Seed=()>
 {
     fn accepted(sock: P::Socket, scope: &mut Scope<Self::Context>)
-        -> Result<Self, Box<Error>>
+        -> Response<Self, Void>
     {
         Self::new(sock, (), scope)
     }
@@ -218,42 +232,26 @@ impl<P: Protocol> Stream<P> {
     fn decompose(self) -> (P, Expectation, StreamImpl<P::Socket>) {
         (self.fsm, self.expectation, StreamImpl {
             socket: self.socket,
-            deadline: self.deadline,
-            timeout: self.timeout,
             inbuf: self.inbuf,
             outbuf: self.outbuf,
         })
     }
     fn compose(implem: StreamImpl<P::Socket>,
-        (fsm, exp, dline): (P, Expectation, Deadline),
-        scope: &mut Scope<P::Context>)
+        (fsm, exp, dline): (P, Expectation, Option<Time>))
         -> Stream<P>
     {
-        let mut timeout = implem.timeout;
-        if dline != implem.deadline {
-            scope.clear_timeout(timeout);
-            // Assuming that we can always add timeout since we have just
-            // cancelled one. It may be not true if timer is already expired
-            // or timeout is too far in future. But I'm not sure that killing
-            // state machine here is much better idea than panicking.
-            timeout = scope.timeout_ms(
-                (dline - SteadyTime::now()).num_milliseconds() as u64)
-                // TODO(tailhook) can we process the error somehow?
-                .expect("Can't replace timer");
-        }
         Stream {
             fsm: fsm,
             socket: implem.socket,
             expectation: exp,
             deadline: dline,
-            timeout: timeout,
             inbuf: implem.inbuf,
             outbuf: implem.outbuf,
         }
     }
     pub fn new(mut sock: P::Socket, seed: P::Seed,
         scope: &mut Scope<P::Context>)
-        -> Result<Self, Box<Error>>
+        -> Response<Self, Void>
     {
         // Always register everything in edge-triggered mode.
         // This allows to never reregister socket.
@@ -262,24 +260,61 @@ impl<P: Protocol> Stream<P> {
         // to lower number of syscalls for many request-reply-like protocols)
         // but it allows to have single source of truth for
         // readable()/writable() mask (no duplication in kernel space)
-        try!(scope.register(&sock,
-            EventSet::readable() | EventSet::writable(), PollOpt::edge()));
-        match P::create(seed, &mut sock, scope) {
-            None => return Err(Box::new(ProtocolStop)),
-            Some((m, exp, dline)) => {
-                let diff = dline - SteadyTime::now();
-                let timeout = try!(scope.timeout_ms(
-                    diff.num_milliseconds() as u64)
-                    .map_err(|_| TimerError));
-                Ok(Stream {
+        if let Err(e) = scope.register(&sock,
+            EventSet::readable() | EventSet::writable(), PollOpt::edge())
+        {
+            // TODO(tailhook) wrap it to more clear error
+            return Response::error(Box::new(e));
+        }
+        let Intent(m, exp, dline) = P::create(seed, &mut sock, scope);
+        match m {
+            Err(None) => Response::error(Box::new(ProtocolStop)),
+            Err(Some(e)) => Response::error(e),
+            Ok(m) => {
+                Response::ok(Stream {
                     socket: sock,
                     expectation: exp,
                     deadline: dline,
-                    timeout: timeout,
                     fsm: m,
                     inbuf: Buf::new(),
                     outbuf: Buf::new(),
-                })
+                }).deadline_opt(dline)
+            }
+        }
+    }
+    pub fn connected(mut sock: P::Socket, seed: P::Seed,
+        scope: &mut Scope<P::Context>)
+        -> Response<Self, Void>
+    {
+        // Always register everything in edge-triggered mode.
+        // This allows to never reregister socket.
+        //
+        // The no-reregister strategy is not a goal (although, it's expected
+        // to lower number of syscalls for many request-reply-like protocols)
+        // but it allows to have single source of truth for
+        // readable()/writable() mask (no duplication in kernel space)
+        //
+        // We reregister here, because we assume that higher level abstraction
+        // has the socket already registered (perhaps `Persistent` machine)
+        if let Err(e) = scope.reregister(&sock,
+            EventSet::readable() | EventSet::writable(), PollOpt::edge())
+        {
+            // TODO(tailhook) wrap it to more clear error
+            return Response::error(Box::new(e));
+        }
+        let Intent(m, exp, dline) = P::create(seed, &mut sock, scope);
+        match m {
+            Err(None) => Response::error(Box::new(ProtocolStop)),
+            Err(Some(e)) => Response::error(e),
+            Ok(m) => {
+                Response::ok(Stream {
+                    socket: sock,
+                    expectation: exp,
+                    deadline: dline,
+                    fsm: m,
+                    inbuf: Buf::new(),
+                    outbuf: Buf::new(),
+                }).deadline_opt(dline)
             }
         }
     }
@@ -290,7 +325,7 @@ impl<P: Protocol> Machine for Stream<P>
     type Context = P::Context;
     type Seed = Void;
     fn create(void: Void, _scope: &mut Scope<Self::Context>)
-        -> Result<Self, Box<Error>>
+        -> Response<Self, Void>
     {
         unreachable(void);
     }
@@ -299,8 +334,7 @@ impl<P: Protocol> Machine for Stream<P>
     {
         // TODO(tailhook) use `events` to optimize reading
         let (fsm, exp, imp) = self.decompose();
-        let deadline = imp.deadline;
-        imp.action(Some((fsm, exp, deadline)), scope)
+        imp.action(Intent(Ok(fsm), exp, None), scope)
     }
     fn spawned(self, _scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
@@ -310,12 +344,13 @@ impl<P: Protocol> Machine for Stream<P>
     fn timeout(self, scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
     {
-        if Deadline::now() >= self.deadline {
+        if scope.reached(self.deadline) {
             let (fsm, _exp, mut imp) = self.decompose();
             let res = fsm.timeout(&mut imp.transport(), scope);
             imp.action(res, scope)
         } else {
-            // Spurious timeouts are possible for the couple of reasons
+            // TODO(tailhook) in rotor 0.6 should be no spurious timeouts
+            // anymore, but let's keep it until we remove Scope::timeout_ms()
             Response::ok(self)
         }
     }
@@ -325,43 +360,5 @@ impl<P: Protocol> Machine for Stream<P>
         let (fsm, _exp, mut imp) = self.decompose();
         let res = fsm.wakeup(&mut imp.transport(), scope);
         imp.action(res, scope)
-    }
-}
-
-/// Protocol returned None right at the start of the stream processing
-#[derive(Debug)]
-pub struct ProtocolStop;
-
-impl fmt::Display for ProtocolStop {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "ProtocolStop")
-    }
-}
-
-impl Error for ProtocolStop {
-    fn cause(&self) -> Option<&Error> { None }
-    fn description(&self) -> &'static str {
-        r#"Protocol returned None (which means "stop") at start"#
-    }
-}
-
-/// Can't insert timer, so can't create a connection
-///
-/// It's may be because there are too many timers in mio event loop or
-/// because timer is too far away in the future (this is a limitation of
-/// mio event loop too)
-#[derive(Debug)]
-pub struct TimerError;
-
-impl fmt::Display for TimerError {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "error inserting timer")
-    }
-}
-
-impl Error for TimerError {
-    fn cause(&self) -> Option<&Error> { None }
-    fn description(&self) -> &'static str {
-        "Can't insert timer, probably too much timers or time is too far away"
     }
 }

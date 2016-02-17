@@ -1,7 +1,7 @@
 use std::io;
 use rotor::Scope;
 
-use {Transport, Request, StreamSocket};
+use {Transport, Intent, StreamSocket};
 
 quick_error!{
     #[derive(Debug)]
@@ -93,7 +93,7 @@ pub trait Protocol: Sized {
     // TODO(tailhook) transport be here instead of sock?
     fn create(seed: Self::Seed, sock: &mut Self::Socket,
         scope: &mut Scope<Self::Context>)
-        -> Request<Self>;
+        -> Intent<Self>;
 
     /// The action WaitBytes or WaitDelimiter is complete
     ///
@@ -104,38 +104,38 @@ pub trait Protocol: Sized {
     /// you don't consume bytes you will repeatedly receive them again.
     fn bytes_read(self, transport: &mut Transport<Self::Socket>,
                   end: usize, scope: &mut Scope<Self::Context>)
-        -> Request<Self>;
+        -> Intent<Self>;
 
     /// The action Flush is complete
     fn bytes_flushed(self, transport: &mut Transport<Self::Socket>,
                      scope: &mut Scope<Self::Context>)
-        -> Request<Self>;
+        -> Intent<Self>;
 
     /// Timeout happened, which means either deadline reached in
     /// Bytes, Delimiter, Flush. Or Sleep has passed.
     fn timeout(self, transport: &mut Transport<Self::Socket>,
         scope: &mut Scope<Self::Context>)
-        -> Request<Self>;
+        -> Intent<Self>;
 
     /// The method is called when too much bytes are read but no delimiter
-    /// is found within the number of bytes specified.
+    /// is found within the number of bytes specified. Or end of stream reached
     ///
     /// The usual case is to just close the connection (because it's probably
     /// DoS attack is going on or the protocol mismatch), but sometimes you
     /// want to send error code, like 413 Entity Too Large for HTTP.
     ///
     /// Note it's your responsibility to wait for the buffer to be flushed.
-    /// If you write to the buffer and then return None immediately, your
-    /// data will be silently discarded.
+    /// If you write to the buffer and then return Intent::done() immediately,
+    /// your data will be silently discarded.
     fn exception(self, _transport: &mut Transport<Self::Socket>,
-        _reason: Exception, _scope: &mut Scope<Self::Context>)
-        -> Request<Self>
+        reason: Exception, _scope: &mut Scope<Self::Context>)
+        -> Intent<Self>
     {
-        None
+        Intent::error(Box::new(reason))
     }
 
     /// Message received (from the main loop)
     fn wakeup(self, transport: &mut Transport<Self::Socket>,
         scope: &mut Scope<Self::Context>)
-        -> Request<Self>;
+        -> Intent<Self>;
 }
