@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io;
 use std::error::Error;
-use std::io::ErrorKind::{WouldBlock, BrokenPipe, WriteZero};
+use std::io::ErrorKind::{WouldBlock, BrokenPipe, WriteZero, ConnectionReset};
 
 use time::SteadyTime;
 use rotor::{Response, Scope, Machine, EventSet, PollOpt};
@@ -179,7 +179,9 @@ impl<S: StreamSocket> StreamImpl<S> {
         match self.inbuf.read_from(&mut self.socket) {
             Ok(0) => IoOp::Eos,
             Ok(_) => IoOp::Done,
-            Err(ref e) if e.kind() == BrokenPipe => IoOp::Eos,
+            Err(ref e) if e.kind() == BrokenPipe
+                       || e.kind() == ConnectionReset
+            => return IoOp::Eos,
             Err(ref e) if e.kind() == WouldBlock => IoOp::NoOp,
             Err(e) => IoOp::Error(e),
         }
@@ -192,7 +194,9 @@ impl<S: StreamSocket> StreamImpl<S> {
             match self.outbuf.write_to(&mut self.socket) {
                 Ok(0) => return IoOp::Eos,
                 Ok(_) => continue,
-                Err(ref e) if e.kind() == BrokenPipe => return IoOp::Eos,
+                Err(ref e) if e.kind() == BrokenPipe
+                           || e.kind() == ConnectionReset
+                => return IoOp::Eos,
                 Err(ref e) if e.kind() == WouldBlock => return IoOp::NoOp,
                 Err(e) => return IoOp::Error(e),
             }
