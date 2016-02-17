@@ -53,6 +53,13 @@ impl<M> IntentBuilder<M> {
     pub fn expect_flush(self) -> Intent<M> {
         Intent(Ok(self.0), Expectation::Flush(0), None)
     }
+    /// Add a generic expectation
+    ///
+    /// The method is useful if you're returning an expectation from somewhere
+    /// otherwise use specific `expect_*` methods
+    pub fn expect(self, e: Expectation) -> Intent<M> {
+        Intent(Ok(self.0), e, None)
+    }
     pub fn sleep(self) -> Intent<M> {
         Intent(Ok(self.0), Expectation::Sleep, None)
     }
