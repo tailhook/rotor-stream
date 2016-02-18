@@ -229,8 +229,9 @@ impl<P: Protocol> Accepted<P::Socket> for Stream<P>
 }
 
 impl<P: Protocol> Stream<P> {
-    fn decompose(self) -> (P, Expectation, StreamImpl<P::Socket>) {
-        (self.fsm, self.expectation, StreamImpl {
+    fn decompose(self) -> (P, Expectation, Option<Time>, StreamImpl<P::Socket>)
+    {
+        (self.fsm, self.expectation, self.deadline, StreamImpl {
             socket: self.socket,
             inbuf: self.inbuf,
             outbuf: self.outbuf,
@@ -333,8 +334,8 @@ impl<P: Protocol> Machine for Stream<P>
         -> Response<Self, Self::Seed>
     {
         // TODO(tailhook) use `events` to optimize reading
-        let (fsm, exp, imp) = self.decompose();
-        imp.action(Intent(Ok(fsm), exp, None), scope)
+        let (fsm, exp, dline, imp) = self.decompose();
+        imp.action(Intent(Ok(fsm), exp, dline), scope)
     }
     fn spawned(self, _scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
@@ -345,7 +346,7 @@ impl<P: Protocol> Machine for Stream<P>
         -> Response<Self, Self::Seed>
     {
         if scope.reached(self.deadline) {
-            let (fsm, _exp, mut imp) = self.decompose();
+            let (fsm, _exp, _dline, mut imp) = self.decompose();
             let res = fsm.timeout(&mut imp.transport(), scope);
             imp.action(res, scope)
         } else {
@@ -357,7 +358,7 @@ impl<P: Protocol> Machine for Stream<P>
     fn wakeup(self, scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
     {
-        let (fsm, _exp, mut imp) = self.decompose();
+        let (fsm, _exp, _dline, mut imp) = self.decompose();
         let res = fsm.wakeup(&mut imp.transport(), scope);
         imp.action(res, scope)
     }
