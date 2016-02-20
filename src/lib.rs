@@ -66,6 +66,11 @@ pub enum Accept<M: Machine, A: TryAccept+Sized> {
     Connection(M),
 }
 
+/// A main stream state machine abstaction
+///
+/// You may use the `Stream` directly. But it's recommented to either use
+/// `Persistent` for client connections or `Accept` for server-side
+/// connection processing.
 pub struct Stream<P: Protocol> {
     socket: P::Socket,
     fsm: P,
@@ -104,4 +109,8 @@ pub trait ActiveStream: StreamSocket {
 /// ```
 ///
 pub struct Intent<M>(Result<M, Option<Box<Error>>>, Expectation, Option<Time>);
+
+/// A helper class returned from `Intent::of()`
+///
+/// See the documentation of `Intent` for guide
 pub struct IntentBuilder<M>(M);

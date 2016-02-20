@@ -4,6 +4,12 @@ use rotor::Scope;
 use {Transport, Intent, StreamSocket};
 
 quick_error!{
+    /// An exception value that is received in `Protocol::exception` method
+    ///
+    /// This thing is usually used for nice error detection. But sometimes it
+    /// is also useful for valid protocol processing. For example it allows
+    /// to detect end-of-stream-delimited prootols (of those which make of
+    /// use of TCP half close)
     #[derive(Debug)]
     pub enum Exception {
         /// End of stream reached (when reading)
@@ -35,6 +41,13 @@ quick_error!{
 }
 
 
+/// This is an enumeration used to declare what next protocol is expecting
+///
+/// The value is used in `Intent::expect()`.
+///
+/// Most users should use `IntentBuilder`'s (a type which is returned from
+/// `Intent::of(..)`) methods. But for some kinds of control flow being
+/// able to specify expectation as a separate enum is very useful.
 // #[derive(Clone, Clone)]
 // This could be Copy, but I think it could be implemented efficient enough
 // without Copy and Clone. Probably we will enable them for the user code later
