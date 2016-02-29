@@ -61,6 +61,7 @@ pub struct Transport<'a, S: StreamSocket> {
 ///
 /// TODO(tailhook) Currently this panics when there is no slab space when
 /// accepting a connection. This may be fixed by sleeping and retrying
+#[derive(Debug)]
 pub enum Accept<M: Machine, A: TryAccept+Sized> {
     Server(A),
     Connection(M),
@@ -71,6 +72,7 @@ pub enum Accept<M: Machine, A: TryAccept+Sized> {
 /// You may use the `Stream` directly. But it's recommented to either use
 /// `Persistent` for client connections or `Accept` for server-side
 /// connection processing.
+#[derive(Debug)]
 pub struct Stream<P: Protocol> {
     socket: P::Socket,
     fsm: P,
@@ -108,9 +110,11 @@ pub trait ActiveStream: StreamSocket {
 ///     .deadline(scope.now() + Duration::new(10, 0))
 /// ```
 ///
+#[derive(Debug)]
 pub struct Intent<M>(Result<M, Option<Box<Error>>>, Expectation, Option<Time>);
 
 /// A helper class returned from `Intent::of()`
 ///
 /// See the documentation of `Intent` for guide
+#[derive(Debug)]
 pub struct IntentBuilder<M>(M);

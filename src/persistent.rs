@@ -27,6 +27,7 @@ pub struct Persistent<P>(<P::Socket as ActiveStream>::Address,
                          P::Seed, Fsm<P>)
     where P: Protocol, P::Socket: ActiveStream;
 
+#[derive(Debug)]
 pub enum Fsm<P: Protocol> {
     Idle,
     Connecting(P::Socket, Time),
