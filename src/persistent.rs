@@ -5,7 +5,7 @@ use rotor::{Machine, EventSet, PollOpt, Scope, Response, Time};
 use rotor::void::{unreachable, Void};
 use rotor::{GenericScope};
 
-use {ActiveStream, Protocol, Stream, ProtocolStop};
+use {ActiveStream, Protocol, Stream, ProtocolStop, Transport};
 use extensions::{ResponseExt, ScopeExt};
 
 
@@ -82,6 +82,19 @@ impl<P> Persistent<P>
             }
         };
         response(address, seed, fsm)
+    }
+    /// Get a `Transport` object of the underlying stream
+    ///
+    /// This method is only useful if you want to manipulate buffers
+    /// externally (like pushing to the buffer from another thread). Just be
+    /// sure to **wake up** state machine after manipulating buffers.
+    ///
+    /// Returns `None` if stream is not currently connected
+    pub fn transport(&mut self) -> Option<Transport<P::Socket>> {
+        match self.2 {
+            Fsm::Established(ref mut s) => Some(s.transport()),
+            _ => None,
+        }
     }
 }
 

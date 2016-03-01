@@ -229,6 +229,18 @@ impl<P: Protocol> Accepted<P::Socket> for Stream<P>
 }
 
 impl<P: Protocol> Stream<P> {
+    /// Get a `Transport` object for the stream
+    ///
+    /// This method is only useful  if you want to manipulate buffers
+    /// externally (like pushing to the buffer from another thread). Just be
+    /// sure to **wake up** state machine after manipulating buffers.
+    pub fn transport(&mut self) -> Transport<P::Socket> {
+        Transport {
+            sock: &mut self.socket,
+            inbuf: &mut self.inbuf,
+            outbuf: &mut self.outbuf,
+        }
+    }
     fn decompose(self) -> (P, Expectation, Option<Time>, StreamImpl<P::Socket>)
     {
         (self.fsm, self.expectation, self.deadline, StreamImpl {
