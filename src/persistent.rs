@@ -49,7 +49,6 @@ fn response<P>(addr: <P::Socket as ActiveStream>::Address,
         Established(..) => unreachable!(),
         Sleeping(tm) => Some(tm),
     };
-    println!("Deadline {:?}", timeo);
     Response::ok(Persistent(addr, seed, fsm))
         .deadline_opt(timeo)
 }
