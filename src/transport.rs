@@ -1,7 +1,6 @@
 use {Buf, Transport, StreamSocket};
 
 
-/// Transport is thing that provides buffered I/O for stream sockets
 impl<'a, S: StreamSocket> Transport<'a, S> {
     /// Get the reference to the underlying stream
     ///

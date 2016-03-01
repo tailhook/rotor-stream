@@ -58,6 +58,13 @@ pub use netbuf::{Buf, MAX_BUF_SIZE};
 // Any is needed to use Stream as a Seed for Machine
 pub trait StreamSocket: Read + Write + Evented + Sized + Any {}
 
+/// Transport is thing that provides buffered I/O for stream sockets
+///
+/// This is usually passed in all the `Protocol` handler methods. But in
+/// case you manipulate the transport by some external methods (like the
+/// one stored in `Arc<Mutex<Stream>>` you may wish to use `Stream::transport`
+/// or `Persistent::transport` methods to manipulate tranpsport. Just remember
+/// to **wake up** the state machine after manipulating buffers of transport.
 pub struct Transport<'a, S: StreamSocket> {
     sock: &'a mut S,
     inbuf: &'a mut Buf,
