@@ -1,6 +1,13 @@
 //! Stream abstraction for rotor
 //!
-//! Assumptions:
+//! The crate provides:
+//!
+//! * Buffering for network sockets
+//! * Simple abstractions like read N bytes, read until '\n'
+//! * Persistent (auto-reconnecting) client connections
+//! * Abstraction for accepting connection on server-side
+//!
+//! Assumptions for streams:
 //!
 //! 1. You read data by length-prefixed or fixed-string-delimited chunks rather
 //!    than byte-by-byte
