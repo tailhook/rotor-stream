@@ -8,12 +8,12 @@ license = "MIT"
 readme = "README.rst"
 keywords = ["stream", "rotor", "tcp", "sockets", "mio"]
 homepage = "http://github.com/tailhook/rotor-stream"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["paul@colomiets.name"]
 
 [dependencies]
-rotor = {git="git://github.com/tailhook/rotor", rev="d001aa3"}
-rotor-tools = { optional = true, git="git://github.com/tailhook/rotor-tools", rev="f32fb8c"}
+rotor = "0.6.0"
+rotor-tools = { optional = true, version = "0.3.0"}
 netbuf = "0.3.1"
 memchr = "0.1.7"
 quick-error = "0.2.1"
