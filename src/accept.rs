@@ -7,7 +7,11 @@ use rotor::mio::{TryAccept};
 use {StreamSocket, Accept};
 
 
+/// Trait which must be implemented for a state machine to accept connection
+///
+/// This basically provides alternative constructor for the state machine.
 pub trait Accepted<S: StreamSocket>: Machine {
+    /// The constructor of the state machine from the accepted connection
     fn accepted(sock: S, scope: &mut Scope<Self::Context>)
         -> Response<Self, Void>;
 }
