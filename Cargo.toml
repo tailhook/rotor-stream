@@ -13,6 +13,7 @@ authors = ["paul@colomiets.name"]
 
 [dependencies]
 rotor = {git="git://github.com/tailhook/rotor", rev="d001aa3"}
+rotor-tools = { optional = true, git="git://github.com/tailhook/rotor-tools", rev="4f16e5c"}
 netbuf = "0.3.1"
 memchr = "0.1.7"
 quick-error = "0.2.1"
@@ -23,6 +24,10 @@ argparse = "0.2.1"
 nix = "0.4.2"
 httparse = "1.1.0"
 env_logger = "0.3.2"
+
+[features]
+default = ["replaceable"]
+replaceable = ["rotor-tools"]
 
 [lib]
 name = "rotor_stream"

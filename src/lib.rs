@@ -27,6 +27,7 @@ extern crate memchr;
 extern crate rotor;
 #[macro_use] extern crate log;
 #[macro_use] extern crate quick_error;
+#[cfg(feature="replaceable")] extern crate rotor_tools;
 
 
 mod substr;

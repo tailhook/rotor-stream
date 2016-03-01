@@ -223,3 +223,26 @@ impl<P: Protocol> Machine for Persistent<P>
         response(addr, seed, state)
     }
 }
+
+#[cfg(feature="replaceable")]
+mod replaceable {
+
+    use std::fmt::Debug;
+
+    use {ActiveStream, Protocol, Persistent};
+    use rotor_tools::sync::Replaceable;
+
+    use super::Fsm;
+
+    impl<P: Protocol> Replaceable for Persistent<P>
+        where P: Protocol,
+              P::Seed: Clone,
+              <P::Socket as ActiveStream>::Address: Clone + Debug,
+              P::Socket: ActiveStream
+    {
+        fn empty(&self) -> Self {
+            // We assume that cloning is cheap enough. Probably just Copy
+            Persistent(self.0.clone(), self.1.clone(), Fsm::Idle)
+        }
+    }
+}
