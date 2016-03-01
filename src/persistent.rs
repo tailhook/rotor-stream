@@ -83,6 +83,11 @@ impl<P> Persistent<P>
         };
         response(address, seed, fsm)
     }
+}
+
+impl<P> Persistent<P>
+    where P: Protocol, P::Socket: ActiveStream
+{
     /// Get a `Transport` object of the underlying stream
     ///
     /// This method is only useful if you want to manipulate buffers
