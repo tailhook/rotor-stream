@@ -157,9 +157,7 @@ impl<P: Protocol> Machine for Persistent<P>
                             resp.cause().unwrap_or(&ProtocolStop));
                         Fsm::Sleeping(scope.after(RECONNECT_TIMEOUT))
                     } else {
-                        return resp
-                            .wrap(Established)
-                            .wrap(|x| Persistent(addr, seed, x))
+                        return Fsm::action(resp, addr, seed, scope);
                     }
                 } else if events.is_hup() {
                     error!("Connection closed immediately");
