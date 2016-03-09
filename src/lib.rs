@@ -51,7 +51,7 @@ use std::io;
 use std::io::{Read, Write};
 use std::error::Error;
 
-use rotor::{Machine, Evented, Time};
+use rotor::{Evented, Time};
 use rotor::mio::{TryAccept};
 
 pub use netbuf::{Buf, MAX_BUF_SIZE};
@@ -76,9 +76,12 @@ pub struct Transport<'a, S: StreamSocket> {
 ///
 /// TODO(tailhook) Currently this panics when there is no slab space when
 /// accepting a connection. This may be fixed by sleeping and retrying
-#[derive(Debug)]
-pub enum Accept<M: Machine, A: TryAccept+Sized> {
-    Server(A),
+pub enum Accept<M, A: TryAccept+Sized>
+    where A::Output: StreamSocket,
+          M: Accepted<A::Output>,
+          <M as Accepted<A::Output>>::Seed: Clone,
+{
+    Server(A, <M as Accepted<A::Output>>::Seed),
     Connection(M),
 }
 

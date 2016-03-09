@@ -11,55 +11,62 @@ use {StreamSocket, Accept};
 ///
 /// This basically provides alternative constructor for the state machine.
 pub trait Accepted<S: StreamSocket>: Machine {
+    type Seed;
     /// The constructor of the state machine from the accepted connection
-    fn accepted(sock: S, scope: &mut Scope<Self::Context>)
+    fn accepted(sock: S, seed: <Self as Accepted<S>>::Seed,
+        scope: &mut Scope<Self::Context>)
         -> Response<Self, Void>;
 }
 
 
 impl<M, A> Accept<M, A>
     where A: TryAccept + Evented + Any,
-          M: Machine
+          A::Output: StreamSocket,
+          M: Accepted<A::Output>,
+          <M as Accepted<A::Output>>::Seed: Clone,
 {
-    pub fn new<S: GenericScope>(sock: A, scope: &mut S)
+    pub fn new<S: GenericScope>(sock: A,
+        seed: <M as Accepted<A::Output>>::Seed, scope: &mut S)
         -> Response<Self, Void>
     {
         match scope.register(&sock, EventSet::readable(), PollOpt::edge()) {
             Ok(()) => {}
             Err(e) => return Response::error(Box::new(e)),
         }
-        Response::ok(Accept::Server(sock))
+        Response::ok(Accept::Server(sock, seed))
     }
 }
 
-impl<M, A, S> Machine for Accept<M, A>
-    where A: TryAccept<Output=S> + Evented + Any,
-          S: StreamSocket,
-          M: Machine + Accepted<S>,
+impl<M, A> Machine for Accept<M, A>
+    where A: TryAccept + Evented + Any,
+          A::Output: StreamSocket,
+          M: Accepted<A::Output>,
+          <M as Accepted<A::Output>>::Seed: Clone,
 {
     type Context = M::Context;
-    type Seed = S;
-    fn create(sock: S, scope: &mut Scope<Self::Context>)
+    type Seed = (A::Output, <M as Accepted<A::Output>>::Seed);
+    fn create((sock, seed): Self::Seed, scope: &mut Scope<Self::Context>)
         -> Response<Self, Void>
     {
-        M::accepted(sock, scope).wrap(Accept::Connection)
+        M::accepted(sock, seed, scope).wrap(Accept::Connection)
     }
 
     fn ready(self, events: EventSet, scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
     {
         match self {
-            Accept::Server(a) => {
+            Accept::Server(a, s) => {
                 match a.accept() {
                     Ok(Some(sock)) => {
-                        Response::spawn(Accept::Server(a), sock)
+                        let seed = (sock, s.clone());
+                        Response::spawn(Accept::Server(a, s), seed)
                     }
                     Ok(None) =>  {
-                        Response::ok(Accept::Server(a))
+                        Response::ok(Accept::Server(a, s))
                     }
                     Err(_) => {
                         // TODO(tailhook) maybe log the error
-                        Response::ok(Accept::Server(a))
+                        Response::ok(Accept::Server(a, s))
                     }
                 }
             }
@@ -74,17 +81,18 @@ impl<M, A, S> Machine for Accept<M, A>
         -> Response<Self, Self::Seed>
     {
         match self {
-            Accept::Server(a) => {
+            Accept::Server(a, s) => {
                 match a.accept() {
                     Ok(Some(sock)) => {
-                        Response::spawn(Accept::Server(a), sock)
+                        let seed = (sock, s.clone());
+                        Response::spawn(Accept::Server(a, s), seed)
                     }
                     Ok(None) =>  {
-                        Response::ok(Accept::Server(a))
+                        Response::ok(Accept::Server(a, s))
                     }
                     Err(_) => {
                         // TODO(tailhook) maybe log the error
-                        Response::ok(Accept::Server(a))
+                        Response::ok(Accept::Server(a, s))
                     }
                 }
             }
@@ -98,7 +106,7 @@ impl<M, A, S> Machine for Accept<M, A>
         -> Response<Self, Self::Seed>
     {
         match self {
-            Accept::Server(_) => unreachable!(),
+            Accept::Server(..) => unreachable!(),
             Accept::Connection(m) => {
                 m.timeout(scope).map(Accept::Connection, |_| unreachable!())
             }
@@ -109,7 +117,7 @@ impl<M, A, S> Machine for Accept<M, A>
         -> Response<Self, Self::Seed>
     {
         match self {
-            Accept::Server(_) => unreachable!(),
+            me @ Accept::Server(..) => Response::ok(me),
             Accept::Connection(m) => {
                 m.wakeup(scope).map(Accept::Connection, |_| unreachable!())
             }
