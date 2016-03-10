@@ -11,7 +11,7 @@ use {StreamSocket, Accept};
 ///
 /// This basically provides alternative constructor for the state machine.
 pub trait Accepted<S: StreamSocket>: Machine {
-    type Seed;
+    type Seed: Clone;
     /// The constructor of the state machine from the accepted connection
     fn accepted(sock: S, seed: <Self as Accepted<S>>::Seed,
         scope: &mut Scope<Self::Context>)
@@ -23,7 +23,6 @@ impl<M, A> Accept<M, A>
     where A: TryAccept + Evented + Any,
           A::Output: StreamSocket,
           M: Accepted<A::Output>,
-          <M as Accepted<A::Output>>::Seed: Clone,
 {
     pub fn new<S: GenericScope>(sock: A,
         seed: <M as Accepted<A::Output>>::Seed, scope: &mut S)
@@ -41,7 +40,6 @@ impl<M, A> Machine for Accept<M, A>
     where A: TryAccept + Evented + Any,
           A::Output: StreamSocket,
           M: Accepted<A::Output>,
-          <M as Accepted<A::Output>>::Seed: Clone,
 {
     type Context = M::Context;
     type Seed = (A::Output, <M as Accepted<A::Output>>::Seed);
