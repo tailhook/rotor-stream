@@ -78,10 +78,9 @@ pub struct Transport<'a, S: StreamSocket> {
 /// accepting a connection. This may be fixed by sleeping and retrying
 pub enum Accept<M, A: TryAccept+Sized>
     where A::Output: StreamSocket,
-          M: Accepted<A::Output>,
-          <M as Accepted<A::Output>>::Seed: Clone,
+          M: Accepted<Socket=A::Output>,
 {
-    Server(A, <M as Accepted<A::Output>>::Seed),
+    Server(A, <M as Accepted>::Seed),
     Connection(M),
 }
 

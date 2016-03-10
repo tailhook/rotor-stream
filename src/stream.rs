@@ -218,10 +218,11 @@ impl<S: StreamSocket> StreamImpl<S> {
     }
 }
 
-impl<P: Protocol> Accepted<P::Socket> for Stream<P>
+impl<P: Protocol> Accepted for Stream<P>
     where <P as Protocol>::Seed: Clone
 {
     type Seed = <P as Protocol>::Seed;
+    type Socket = P::Socket;
     fn accepted(sock: P::Socket, seed: <P as Protocol>::Seed,
         scope: &mut Scope<Self::Context>)
         -> Response<Self, Void>
