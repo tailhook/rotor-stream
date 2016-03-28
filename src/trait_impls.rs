@@ -6,9 +6,10 @@ use std::path::PathBuf;
 use rotor::mio::Evented;
 use rotor::mio::{tcp, unix};
 
-use {StreamSocket, ActiveStream};
+use {StreamSocket, ActiveStream, SocketError};
 
-impl<T> StreamSocket for T where T: io::Read, T: io::Write, T: Evented, T:Any
+impl<T> StreamSocket for T
+    where T: io::Read, T: io::Write, T: Evented, T:SocketError, T:Any
 {}
 
 impl ActiveStream for tcp::TcpStream {
@@ -25,3 +26,14 @@ impl ActiveStream for unix::UnixStream {
     }
 }
 
+impl SocketError for tcp::TcpStream {
+    fn take_socket_error(&self) -> io::Result<()> {
+        tcp::TcpStream::take_socket_error(self)
+    }
+}
+
+impl SocketError for unix::UnixStream {
+    fn take_socket_error(&self) -> io::Result<()> {
+        Ok(())
+    }
+}

@@ -1,12 +1,13 @@
 extern crate rotor;
 extern crate rotor_stream;
 
-use std::io::{Write};
+use std::io::{Write, stderr};
+use std::error::Error;
 use std::time::Duration;
 
 use rotor::mio::tcp::{TcpListener, TcpStream};
 use rotor::{Scope};
-use rotor_stream::{Accept, Stream, Protocol, Intent, Transport};
+use rotor_stream::{Accept, Stream, Protocol, Intent, Transport, Exception};
 
 
 struct Context;
@@ -53,7 +54,7 @@ impl Protocol for Http {
         _scope: &mut Scope<Context>)
         -> Intent<Self>
     {
-        println!("Timeout");
+        writeln!(&mut stderr(), "Timeout happened").ok();
         Intent::done()
     }
 
@@ -62,6 +63,19 @@ impl Protocol for Http {
         -> Intent<Self>
     {
         unreachable!();
+    }
+    fn exception(self, _transport: &mut Transport<Self::Socket>,
+        reason: Exception, _scope: &mut Scope<Self::Context>)
+        -> Intent<Self>
+    {
+        writeln!(&mut stderr(), "Error: {}", reason).ok();
+        Intent::done()
+    }
+    fn fatal(self, reason: Exception, _scope: &mut Scope<Self::Context>)
+        -> Option<Box<Error>>
+    {
+        writeln!(&mut stderr(), "Error: {}", reason).ok();
+        None
     }
 }
 

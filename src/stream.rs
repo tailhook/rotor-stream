@@ -9,7 +9,7 @@ use substr::find_substr;
 use extensions::{ScopeExt, ResponseExt};
 use {Expectation, Protocol, StreamSocket, Stream, StreamImpl};
 use {Buf, Transport, Accepted, Exception, Intent};
-use {ProtocolStop};
+use {ProtocolStop, SocketError};
 
 
 #[derive(Debug)]
@@ -62,20 +62,16 @@ impl<S: StreamSocket> StreamImpl<S> {
             IoOp::Done => true,
             IoOp::NoOp => false,
             IoOp::Eos => {
-                intent = try!(to_result(intent.0.exception(
-                    &mut self.transport(),
+                self.outbuf.remove_range(..);
+                return Err(intent.0.fatal(
                     Exception::WriteError(io::Error::new(
                         WriteZero, "failed to write whole buffer")),
-                    scope)));
-                self.outbuf.remove_range(..);
-                false
+                    scope));
             }
             IoOp::Error(e) => {
-                intent = try!(to_result(intent.0.exception(
-                    &mut self.transport(),
+                return Err(intent.0.fatal(
                     Exception::WriteError(e),
-                    scope)));
-                false
+                    scope));
             }
         };
         'outer: loop {
@@ -84,20 +80,17 @@ impl<S: StreamSocket> StreamImpl<S> {
                     IoOp::Done => true,
                     IoOp::NoOp => false,
                     IoOp::Eos => {
-                        intent = try!(to_result(intent.0.exception(
-                            &mut self.transport(),
+                        self.outbuf.remove_range(..);
+                        return Err(intent.0.fatal(
                             Exception::WriteError(io::Error::new(
                                 WriteZero, "failed to write whole buffer")),
-                            scope)));
-                        self.outbuf.remove_range(..);
-                        false
+                            scope));
                     }
                     IoOp::Error(e) => {
-                        intent = try!(to_result(intent.0.exception(
-                            &mut self.transport(),
+                        self.outbuf.remove_range(..);
+                        return Err(intent.0.fatal(
                             Exception::WriteError(e),
-                            scope)));
-                        false
+                            scope));
                     }
                 };
             }
@@ -248,6 +241,7 @@ impl<P: Protocol> Stream<P> {
     {
         (self.fsm, self.expectation, self.deadline, StreamImpl {
             socket: self.socket,
+            connected: self.connected,
             inbuf: self.inbuf,
             outbuf: self.outbuf,
         })
@@ -260,6 +254,7 @@ impl<P: Protocol> Stream<P> {
             fsm: fsm,
             socket: implem.socket,
             expectation: exp,
+            connected: implem.connected,
             deadline: dline,
             inbuf: implem.inbuf,
             outbuf: implem.outbuf,
@@ -290,6 +285,7 @@ impl<P: Protocol> Stream<P> {
                 Response::ok(Stream {
                     socket: sock,
                     expectation: exp,
+                    connected: false,
                     deadline: dline,
                     fsm: m,
                     inbuf: Buf::new(),
@@ -326,6 +322,7 @@ impl<P: Protocol> Stream<P> {
                 Response::ok(Stream {
                     socket: sock,
                     expectation: exp,
+                    connected: true,
                     deadline: dline,
                     fsm: m,
                     inbuf: Buf::new(),
@@ -345,11 +342,23 @@ impl<P: Protocol> Machine for Stream<P>
     {
         unreachable(void);
     }
-    fn ready(self, _events: EventSet, scope: &mut Scope<Self::Context>)
+    fn ready(self, events: EventSet, scope: &mut Scope<Self::Context>)
         -> Response<Self, Self::Seed>
     {
         // TODO(tailhook) use `events` to optimize reading
-        let (fsm, exp, dline, imp) = self.decompose();
+        let (fsm, exp, dline, mut imp) = self.decompose();
+        if !imp.connected && events.is_writable() {
+            match imp.socket.take_socket_error() {
+                Ok(()) => {}
+                Err(e) => {
+                    match fsm.fatal(Exception::ConnectError(e), scope) {
+                        Some(e) => return Response::error(e),
+                        None => return Response::done(),
+                    }
+                }
+            }
+            imp.connected = true;
+        }
         imp.action(Intent(Ok(fsm), exp, dline), scope)
     }
     fn spawned(self, _scope: &mut Scope<Self::Context>)

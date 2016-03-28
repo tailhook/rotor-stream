@@ -1,4 +1,5 @@
 use std::io;
+use std::error::Error;
 use rotor::Scope;
 
 use {Transport, Intent, StreamSocket};
@@ -36,6 +37,10 @@ quick_error!{
         WriteError(err: io::Error) {
             description("error when writing to stream")
             display("write error: {}", err)
+        }
+        ConnectError(err: io::Error) {
+            description("error when connecting to an address")
+            display("connection error: {}", err)
         }
     }
 }
@@ -140,12 +145,25 @@ pub trait Protocol: Sized {
     /// Note it's your responsibility to wait for the buffer to be flushed.
     /// If you write to the buffer and then return Intent::done() immediately,
     /// your data will be silently discarded.
+    ///
+    /// The `WriteError` and `ConnectError` are never passed here but passed
+    /// into `fatal` handler instead.
     fn exception(self, _transport: &mut Transport<Self::Socket>,
         reason: Exception, _scope: &mut Scope<Self::Context>)
         -> Intent<Self>
     {
         Intent::error(Box::new(reason))
     }
+
+    /// This method is called on fatal errors of the connection
+    ///
+    /// Connection can't proceed after this method is called
+    ///
+    /// Note: we use shared `Exception` type for both exception and fatal
+    /// exceptions. This method receives ``WriteError`` and ``ConnectError``
+    /// options only.
+    fn fatal(self, reason: Exception, scope: &mut Scope<Self::Context>)
+        -> Option<Box<Error>>;
 
     /// Message received (from the main loop)
     fn wakeup(self, transport: &mut Transport<Self::Socket>,

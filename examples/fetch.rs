@@ -11,6 +11,7 @@ use std::str::from_utf8;
 use std::net::ToSocketAddrs;
 use std::io::{stdout, stderr, Write};
 use std::time::Duration;
+use std::error::Error;
 
 use argparse::{ArgumentParser, Store};
 use rotor::mio::tcp::{TcpStream};
@@ -130,7 +131,14 @@ impl<'a> Protocol for Http {
     {
         writeln!(&mut stderr(), "Error when fetching data: {}", reason).ok();
         scope.shutdown_loop();
-        Intent::error(Box::new(reason))
+        Intent::done()
+    }
+    fn fatal(self, reason: Exception, scope: &mut Scope<Self::Context>)
+        -> Option<Box<Error>>
+    {
+        writeln!(&mut stderr(), "Error when fetching data: {}", reason).ok();
+        scope.shutdown_loop();
+        None
     }
 }
 

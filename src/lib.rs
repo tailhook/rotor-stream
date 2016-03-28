@@ -57,7 +57,7 @@ use rotor::mio::{TryAccept};
 pub use netbuf::{Buf, MAX_BUF_SIZE};
 
 // Any is needed to use Stream as a Seed for Machine
-pub trait StreamSocket: Read + Write + Evented + Sized + Any {}
+pub trait StreamSocket: Read + Write + Evented + SocketError + Sized + Any {}
 
 /// Transport is thing that provides buffered I/O for stream sockets
 ///
@@ -94,6 +94,7 @@ pub struct Stream<P: Protocol> {
     socket: P::Socket,
     fsm: P,
     expectation: Expectation,
+    connected: bool,
     deadline: Option<Time>,
     inbuf: Buf,
     outbuf: Buf,
@@ -101,6 +102,7 @@ pub struct Stream<P: Protocol> {
 
 struct StreamImpl<S: StreamSocket> {
     socket: S,
+    connected: bool,
     inbuf: Buf,
     outbuf: Buf,
 }
@@ -108,6 +110,10 @@ struct StreamImpl<S: StreamSocket> {
 pub trait ActiveStream: StreamSocket {
     type Address;
     fn connect(addr: &Self::Address) -> io::Result<Self>;
+}
+
+pub trait SocketError {
+    fn take_socket_error(&self) -> io::Result<()>;
 }
 
 /// A structure that encapsulates a state machine and an expectation

@@ -10,9 +10,10 @@ use std::str::from_utf8;
 use std::net::ToSocketAddrs;
 use std::io::{stdout, stderr, Write};
 use std::time::Duration;
+use std::error::Error;
 
 use rotor::mio::tcp::{TcpStream};
-use rotor_stream::{Persistent, Transport, Protocol, Intent};
+use rotor_stream::{Persistent, Transport, Protocol, Intent, Exception};
 use rotor::{Scope};
 
 
@@ -133,6 +134,20 @@ impl<'a> Protocol for Http {
         -> Intent<Self>
     {
         unreachable!("wakeup");
+    }
+
+    fn exception(self, _transport: &mut Transport<Self::Socket>,
+        reason: Exception, _scope: &mut Scope<Self::Context>)
+        -> Intent<Self>
+    {
+        writeln!(&mut stderr(), "Error when fetching data: {}", reason).ok();
+        Intent::done()
+    }
+    fn fatal(self, reason: Exception, _scope: &mut Scope<Self::Context>)
+        -> Option<Box<Error>>
+    {
+        writeln!(&mut stderr(), "Error when fetching data: {}", reason).ok();
+        None
     }
 }
 
