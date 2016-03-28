@@ -150,10 +150,7 @@ pub trait Protocol: Sized {
     /// into `fatal` handler instead.
     fn exception(self, _transport: &mut Transport<Self::Socket>,
         reason: Exception, _scope: &mut Scope<Self::Context>)
-        -> Intent<Self>
-    {
-        Intent::error(Box::new(reason))
-    }
+        -> Intent<Self>;
 
     /// This method is called on fatal errors of the connection
     ///
