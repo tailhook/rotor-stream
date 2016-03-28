@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use argparse::{ArgumentParser, Store};
 use rotor::mio::tcp::{TcpStream};
-use rotor_stream::{Stream, Transport, Protocol, Intent};
+use rotor_stream::{Stream, Transport, Protocol, Intent, Exception};
 use rotor::{Scope};
 
 
@@ -122,6 +122,15 @@ impl<'a> Protocol for Http {
         -> Intent<Self>
     {
         unreachable!();
+    }
+
+    fn exception(self, _transport: &mut Transport<Self::Socket>,
+        reason: Exception, scope: &mut Scope<Self::Context>)
+        -> Intent<Self>
+    {
+        writeln!(&mut stderr(), "Error when fetching data: {}", reason).ok();
+        scope.shutdown_loop();
+        Intent::error(Box::new(reason))
     }
 }
 
