@@ -227,7 +227,7 @@ impl<P: Protocol> Accepted for Stream<P>
 impl<P: Protocol> Stream<P> {
     /// Get a `Transport` object for the stream
     ///
-    /// This method is only useful  if you want to manipulate buffers
+    /// This method is only useful if you want to manipulate buffers
     /// externally (like pushing to the buffer from another thread). Just be
     /// sure to **wake up** state machine after manipulating buffers.
     pub fn transport(&mut self) -> Transport<P::Socket> {
@@ -236,6 +236,14 @@ impl<P: Protocol> Stream<P> {
             inbuf: &mut self.inbuf,
             outbuf: &mut self.outbuf,
         }
+    }
+    /// Get a `Protocol` object for the stream
+    ///
+    /// This method is only useful if you want to adjust protocol dysyr
+    /// externally (like update some values after pushing data to buffer).
+    /// Just be sure to **wake up** state machine if needed by the protocol.
+    pub fn protocol(&mut self) -> &mut P {
+        &mut self.fsm
     }
     fn decompose(self) -> (P, Expectation, Option<Time>, StreamImpl<P::Socket>)
     {

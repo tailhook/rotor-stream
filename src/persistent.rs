@@ -100,6 +100,17 @@ impl<P> Persistent<P>
             _ => None,
         }
     }
+    /// Get a `Protocol` object for the stream
+    ///
+    /// This method is only useful if you want to adjust protocol dysyr
+    /// externally (like update some values after pushing data to buffer).
+    /// Just be sure to **wake up** state machine if needed by the protocol.
+    pub fn protocol(&mut self) -> Option<&mut P> {
+        match self.2 {
+            Fsm::Established(ref mut s) => Some(s.protocol()),
+            _ => None,
+        }
+    }
 }
 
 impl<P> Fsm<P>
