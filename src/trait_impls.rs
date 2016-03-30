@@ -1,10 +1,13 @@
 use std::io;
 use std::any::Any;
 use std::net::SocketAddr;
+#[cfg(unix)]
 use std::path::PathBuf;
 
 use rotor::mio::Evented;
-use rotor::mio::{tcp, unix};
+use rotor::mio::tcp;
+#[cfg(unix)]
+use rotor::mio::unix;
 
 use {StreamSocket, ActiveStream, SocketError};
 
@@ -19,6 +22,7 @@ impl ActiveStream for tcp::TcpStream {
     }
 }
 
+#[cfg(unix)]
 impl ActiveStream for unix::UnixStream {
     type Address = PathBuf;
     fn connect(addr: &PathBuf) -> io::Result<Self> {
@@ -32,6 +36,7 @@ impl SocketError for tcp::TcpStream {
     }
 }
 
+#[cfg(unix)]
 impl SocketError for unix::UnixStream {
     fn take_socket_error(&self) -> io::Result<()> {
         Ok(())
