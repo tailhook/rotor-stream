@@ -45,6 +45,7 @@ pub use protocol::{Protocol, Expectation, Exception};
 pub use accept::{Accepted};
 pub use persistent::{Persistent};
 pub use errors::ProtocolStop;
+#[cfg(feature="replaceable")] pub use rotor_tools::sync;
 
 use std::any::Any;
 use std::io;
