@@ -280,7 +280,7 @@ impl<P: Protocol> Stream<P> {
         // but it allows to have single source of truth for
         // readable()/writable() mask (no duplication in kernel space)
         if let Err(e) = scope.register(&sock,
-            EventSet::readable() | EventSet::writable(), PollOpt::edge())
+            EventSet::all(), PollOpt::edge())
         {
             // TODO(tailhook) wrap it to more clear error
             return Response::error(Box::new(e));
@@ -317,7 +317,7 @@ impl<P: Protocol> Stream<P> {
         // We reregister here, because we assume that higher level abstraction
         // has the socket already registered (perhaps `Persistent` machine)
         if let Err(e) = scope.reregister(&sock,
-            EventSet::readable() | EventSet::writable(), PollOpt::edge())
+            EventSet::all(), PollOpt::edge())
         {
             // TODO(tailhook) wrap it to more clear error
             return Response::error(Box::new(e));
@@ -355,16 +355,27 @@ impl<P: Protocol> Machine for Stream<P>
     {
         // TODO(tailhook) use `events` to optimize reading
         let (fsm, exp, dline, mut imp) = self.decompose();
-        if !imp.connected && events.is_writable() {
+        if events.is_hup() || events.is_error() {
             match imp.socket.take_socket_error() {
-                Ok(()) => {}
+                Ok(()) => {
+                    match fsm.fatal(Exception::EndOfStream, scope) {
+                        Some(e) => return Response::error(e),
+                        None => return Response::done(),
+                    }
+                }
                 Err(e) => {
-                    match fsm.fatal(Exception::ConnectError(e), scope) {
+                    let exception = if imp.connected {
+                        Exception::ReadError(e)
+                    } else {
+                        Exception::ConnectError(e)
+                    };
+                    match fsm.fatal(exception, scope) {
                         Some(e) => return Response::error(e),
                         None => return Response::done(),
                     }
                 }
             }
+        } else if !imp.connected {
             imp.connected = true;
         }
         imp.action(Intent(Ok(fsm), exp, dline), scope)
