@@ -225,6 +225,11 @@ impl<P: Protocol> Accepted for Stream<P>
 }
 
 impl<P: Protocol> Stream<P> {
+    /// Destroy the `Stream` to reclaim the underlying socket.
+    pub fn destroy(self) -> P::Socket {
+        self.socket
+    }
+    
     /// Get a `Transport` object for the stream
     ///
     /// This method is only useful if you want to manipulate buffers
