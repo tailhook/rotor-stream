@@ -8,7 +8,7 @@ use rotor::void::{Void, unreachable};
 use substr::find_substr;
 use extensions::{ScopeExt, ResponseExt};
 use {Expectation, Protocol, StreamSocket, Stream, StreamImpl};
-use {Buf, Transport, Accepted, Exception, Intent};
+use {Buf, Transport, Accepted, Exception, Intent, MigrateProtocol};
 use {ProtocolStop, SocketError};
 
 
@@ -211,6 +211,14 @@ impl<S: StreamSocket> StreamImpl<S> {
     }
 }
 
+impl<P, O> MigrateProtocol<P> for Stream<O> where P: Protocol, O: Protocol<Socket=P::Socket> {
+    type Output = Stream<P>;
+
+    fn migrate(self, seed: P::Seed, scope: &mut Scope<P::Context>) -> Response<Stream<P>, Void> {
+        Stream::<P>::connected(self.socket, seed, scope)
+    }
+}
+
 impl<P: Protocol> Accepted for Stream<P>
     where <P as Protocol>::Seed: Clone
 {
@@ -225,11 +233,6 @@ impl<P: Protocol> Accepted for Stream<P>
 }
 
 impl<P: Protocol> Stream<P> {
-    /// Destroy the `Stream` to reclaim the underlying socket.
-    pub fn destroy(self) -> P::Socket {
-        self.socket
-    }
-    
     /// Get a `Transport` object for the stream
     ///
     /// This method is only useful if you want to manipulate buffers
