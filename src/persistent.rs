@@ -1,11 +1,10 @@
 use std::fmt::Debug;
-use std::error::Error;
 
 use rotor::{Machine, EventSet, PollOpt, Scope, Response, Time};
 use rotor::void::{unreachable, Void};
 use rotor::{GenericScope};
 
-use {ActiveStream, Protocol, Stream, ProtocolStop, Transport};
+use {ActiveStream, Protocol, Stream, ProtocolStop, Transport, MigrateProtocol};
 use extensions::{ResponseExt, ScopeExt};
 
 
@@ -136,6 +135,21 @@ impl<P> Fsm<P>
             resp
                 .wrap(Fsm::Established)
                 .wrap(|x| Persistent(addr, seed, x))
+        }
+    }
+}
+
+impl<P, O> MigrateProtocol<P> for Persistent<O> where P: Protocol, P::Socket: ActiveStream, P::Seed: Clone, O: Protocol<Socket=P::Socket> {
+    type Output = Persistent<P>;
+
+    fn migrate(self, seed: P::Seed, scope: &mut Scope<P::Context>) -> Response<Persistent<P>, Void> {
+        let Persistent(address, _, fsm) = self;
+
+        match fsm {
+            Fsm::Idle => Response::ok(Persistent(address, seed, Fsm::Idle)),
+            Fsm::Connecting(sock, time) => Response::ok(Persistent(address, seed, Fsm::Connecting(sock, time))).deadline(time),
+            Fsm::Established(stream) => stream.migrate(seed.clone(), scope).wrap(|stream| Persistent(address, seed, Fsm::Established(stream))),
+            Fsm::Sleeping(time) => Response::ok(Persistent(address, seed, Fsm::Sleeping(time))).deadline(time)
         }
     }
 }

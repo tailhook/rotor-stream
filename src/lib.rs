@@ -52,13 +52,25 @@ use std::io;
 use std::io::{Read, Write};
 use std::error::Error;
 
-use rotor::{Evented, Time};
+use rotor::{Evented, Time, Scope, Response, Void};
 use rotor::mio::{TryAccept};
 
 pub use netbuf::{Buf, MAX_BUF_SIZE};
 
 // Any is needed to use Stream as a Seed for Machine
 pub trait StreamSocket: Read + Write + Evented + SocketError + Sized + Any {}
+
+/// Trait for migrating an existing state machine from one protocol to another.
+pub trait MigrateProtocol<P: Protocol> {
+    /// Output for the migrated type.
+    type Output;
+
+    /// Migrate the existing state machine to operate over the protocol `P`.
+    ///
+    /// Implementations like `Persistent` will retain their current state, so they may not call
+    /// `P::create` immediately.
+    fn migrate(self, seed: P::Seed, scope: &mut Scope<P::Context>) -> Response<Self::Output, Void>;
+}
 
 /// Transport is thing that provides buffered I/O for stream sockets
 ///

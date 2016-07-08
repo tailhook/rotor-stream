@@ -8,7 +8,7 @@ use rotor::void::{Void, unreachable};
 use substr::find_substr;
 use extensions::{ScopeExt, ResponseExt};
 use {Expectation, Protocol, StreamSocket, Stream, StreamImpl};
-use {Buf, Transport, Accepted, Exception, Intent};
+use {Buf, Transport, Accepted, Exception, Intent, MigrateProtocol};
 use {ProtocolStop, SocketError};
 
 
@@ -208,6 +208,14 @@ impl<S: StreamSocket> StreamImpl<S> {
                 Err(e) => return IoOp::Error(e),
             }
         }
+    }
+}
+
+impl<P, O> MigrateProtocol<P> for Stream<O> where P: Protocol, O: Protocol<Socket=P::Socket> {
+    type Output = Stream<P>;
+
+    fn migrate(self, seed: P::Seed, scope: &mut Scope<P::Context>) -> Response<Stream<P>, Void> {
+        Stream::connected(self.socket, seed, scope)
     }
 }
 
