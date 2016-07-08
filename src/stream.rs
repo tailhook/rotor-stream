@@ -215,7 +215,7 @@ impl<P, O> MigrateProtocol<P> for Stream<O> where P: Protocol, O: Protocol<Socke
     type Output = Stream<P>;
 
     fn migrate(self, seed: P::Seed, scope: &mut Scope<P::Context>) -> Response<Stream<P>, Void> {
-        Stream::<P>::connected(self.socket, seed, scope)
+        Stream::connected(self.socket, seed, scope)
     }
 }
 
